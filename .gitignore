@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.tools/
+.prd-work/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+.DS_Store
+**/.DS_Store
+*.bkp
