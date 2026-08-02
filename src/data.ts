@@ -13,6 +13,7 @@ export const guides = [
   { id: "stages", icon: "◷", title: "生命阶段", en: "Life Stages", prompt: "讲述一段最能代表某个生命阶段的故事。", examples: "童年 · 大学 · 第一份工作 · 成为父母" },
   { id: "perspective", icon: "✦", title: "观念转变", en: "Perspective Shifts", prompt: "讲述一个改变你看待自己或世界的瞬间。", examples: "放下一个信念 · 学到艰难的一课 · 克服恐惧" },
   { id: "experience", icon: "◎", title: "重大经历", en: "Major Experiences", prompt: "讲述一个至今仍留在你心里的经历。", examples: "第一次远行 · 独自生活 · 疾病 · 迁移" },
+  { id: "other", icon: "＋", title: "其他", en: "Other", prompt: "写下一个只属于你的故事入口。", examples: "自由编辑你的引导标题或提示" },
 ];
 
 export const stories: Story[] = [
@@ -54,8 +55,9 @@ export const stories: Story[] = [
 ];
 
 export const emptyDraft: Draft = {
-  guide: "", title: "", body: "", mood: "", time: "", stage: "", city: "", people: [],
-  startedAt: Date.now(), edits: 0, pastedChars: 0, saves: 0,
+  guide: "", customGuide: "", title: "", body: "", mood: "", time: "", stage: "", age: "",
+  city: "", cityEn: "", cityCountry: "", cityLat: null, cityLon: null, people: [],
+  startedAt: Date.now(), edits: 0, pastedChars: 0, saves: 0, savedAt: 0,
 };
 
 export const mockAnalysis: Analysis = {

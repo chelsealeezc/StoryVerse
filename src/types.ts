@@ -1,6 +1,7 @@
 export type Theme = "家庭" | "成长" | "迁移" | "关系" | "工作" | "身份";
 export type ResonanceMode = "similar" | "different";
 export type Reaction = "like" | "dislike" | null;
+export type Language = "zh" | "en";
 
 export interface Story {
   id: string;
@@ -24,17 +25,29 @@ export interface Story {
 
 export interface Draft {
   guide: string;
+  customGuide: string;
   title: string;
   body: string;
   mood: string;
   time: string;
   stage: string;
+  age: string;
   city: string;
+  cityEn: string;
+  cityCountry: string;
+  cityLat: number | null;
+  cityLon: number | null;
   people: string[];
   startedAt: number;
   edits: number;
   pastedChars: number;
   saves: number;
+  savedAt: number;
+}
+
+export interface SavedDraft extends Draft {
+  id: string;
+  savedAt: number;
 }
 
 export interface Analysis {
@@ -49,6 +62,7 @@ export interface Analysis {
 }
 
 export interface AppState {
+  language: Language;
   onboarded: boolean;
   accountCreated: boolean;
   firstStoryComplete: boolean;
@@ -59,5 +73,6 @@ export interface AppState {
   reactions: Record<string, Reaction>;
   likedAt: Record<string, number>;
   draft: Draft;
+  draftBox: SavedDraft[];
   analysis: Analysis | null;
 }
