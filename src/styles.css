@@ -198,9 +198,576 @@ input::placeholder,textarea::placeholder { color: #aaa69e; }.auth-form input { h
 .focus-mode-page{background:linear-gradient(180deg,#eafaff 0%,#fff 28%)}.focus-mode-page .collection-layout{max-width:1100px;padding-top:26px}.focus-mode-page .prompt-panel{margin-bottom:28px}.focus-mode-page .story-form{border-radius:28px;padding:28px 32px 34px;background:white}.focus-mode-page .story-form textarea{min-height:50vh}.focus-note{margin-top:20px}
 .analysis-stage{justify-content:center;padding:24px 40px 34px}.analysis-orbit{width:180px;height:136px;margin-bottom:6px}.analysis-stage h1{font-size:clamp(34px,4vw,54px);font-weight:600;letter-spacing:-.055em;margin:4px 0 18px}.analysis-steps{margin:14px 0 18px}.analysis-quote{display:none}.analysis-detect{margin-bottom:18px}.analysis-stage .button{margin-top:0}
 .resonance-hero{padding:42px 30px 30px}.resonance-hero h1{font-size:clamp(38px,4.2vw,62px);font-weight:600;line-height:1.08}.dimension-grid{padding-top:4px}.dimension-card h2{font-size:26px}
+.completion-hint.warn{color:#0879bd;font-weight:700}.story-submit-only .button-primary{flex:0 0 auto}.tag-layer button:disabled{opacity:.38;cursor:not-allowed}.tag-limit{align-self:center;color:#8aa4b3;font-size:10px}
 
 @keyframes portalHintFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
 .portal-down-arrow{display:inline-block;transform:scaleX(1.45)}
+
+/* Unified controls + day/night mode */
+.app-lang-button,
+.app-theme-button,
+.gateway-nav .lang-button,
+.gateway-nav .theme-button {
+  flex: 0 0 auto;
+}
+
+.app-theme-button {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.app-shell-header .app-lang-button,
+.app-shell-header .app-theme-button {
+  box-shadow: 0 10px 28px rgba(6,109,168,.08);
+}
+
+.topbar-actions,
+.wizard-header .header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: end;
+}
+
+.theme-night {
+  color: #f6fbff;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(120,221,235,.14), transparent 30%),
+    radial-gradient(circle at 84% 18%, rgba(168,140,244,.13), transparent 28%),
+    url("./assets/storyverse-night-bg.png") center / cover fixed no-repeat,
+    #020508 !important;
+}
+
+.theme-night::selection {
+  background: rgba(120,221,235,.38);
+}
+
+.theme-night .app-shell-header,
+.theme-night.wizard-page .app-shell-header,
+.theme-night.resonance-page .app-shell-header,
+.theme-night.recommend-page .app-shell-header {
+  border-bottom-color: rgba(255,255,255,.12);
+  background: rgba(3, 10, 16, .72);
+  box-shadow: 0 16px 50px rgba(0,0,0,.28);
+}
+
+.theme-night .app-shell-header .logo span:last-child,
+.theme-night .sidebar .logo span:last-child,
+.theme-night .logo,
+.theme-night .logo-button {
+  color: #f8fcff;
+}
+
+.theme-night .app-shell-header .app-lang-button,
+.theme-night .app-shell-header .app-theme-button {
+  border-color: rgba(255,255,255,.18);
+  background: rgba(255,255,255,.88);
+  color: #07131c;
+}
+
+.theme-night .wizard-stage,
+.theme-night .resonance-hero,
+.theme-night .recommend-heading {
+  color: #f7fbff;
+}
+
+.theme-night .eyebrow,
+.theme-night .section-intro > p:last-child,
+.theme-night .guide-intro-copy > p:last-child,
+.theme-night .completion-hint,
+.theme-night .analysis-stage p,
+.theme-night .new-star small,
+.theme-night .dimension-card p,
+.theme-night .recommend-heading p {
+  color: rgba(232,246,255,.72);
+}
+
+.theme-night .guide-panels,
+.theme-night .guide-panel,
+.theme-night .story-form,
+.theme-night .analysis-steps-copy div,
+.theme-night .confirm-story,
+.theme-night .tag-editor,
+.theme-night .new-star,
+.theme-night .dimension-card,
+.theme-night .recommend-card,
+.theme-night .story-modal,
+.theme-night .stack-actions {
+  border-color: rgba(255,255,255,.16);
+  background: linear-gradient(145deg, rgba(255,255,255,.12), rgba(255,255,255,.055));
+  color: #f7fbff;
+  box-shadow: 0 28px 90px rgba(0,0,0,.34);
+  backdrop-filter: blur(18px);
+}
+
+.theme-night .guide-panel.selected,
+.theme-night .dimension-card button.selected,
+.theme-night .choice-row button.selected,
+.theme-night .chip-row button.selected {
+  background: #f7fbff;
+  color: #031827;
+  border-color: rgba(255,255,255,.88);
+}
+
+.theme-night .prompt-panel {
+  background: linear-gradient(160deg, rgba(3,18,29,.94), rgba(5,36,55,.88));
+  border-color: rgba(120,221,235,.28);
+  box-shadow: 0 28px 100px rgba(0,0,0,.42);
+}
+
+.theme-night input,
+.theme-night textarea,
+.theme-night select,
+.theme-night .tool-line-button,
+.theme-night .choice-row button,
+.theme-night .chip-row button,
+.theme-night .mood-row button,
+.theme-night .city-options {
+  border-color: rgba(255,255,255,.18);
+  background: rgba(255,255,255,.1);
+  color: #f8fcff;
+}
+
+.theme-night input::placeholder,
+.theme-night textarea::placeholder {
+  color: rgba(232,246,255,.52);
+}
+
+.theme-night .tool-line-button,
+.theme-night .field-label,
+.theme-night .story-form label,
+.theme-night .form-heading,
+.theme-night .count,
+.theme-night .field-name small,
+.theme-night .city-coords,
+.theme-night .analysis-detect {
+  color: rgba(232,246,255,.78);
+}
+
+.theme-night .mood-row b,
+.theme-night .analysis-steps-copy b,
+.theme-night .dimension-card h2,
+.theme-night .recommend-card h2,
+.theme-night .new-star b {
+  color: #f8fcff;
+}
+
+.theme-night .analysis-stage {
+  background:
+    radial-gradient(circle at 50% 22%, rgba(120,221,235,.13), transparent 28%),
+    url("./assets/storyverse-night-bg.png") center / cover fixed no-repeat,
+    #020508;
+}
+
+.theme-night .analysis-ring,
+.theme-night .analysis-steps span,
+.theme-night .analysis-detect b {
+  border-color: rgba(232,246,255,.22);
+  background: rgba(255,255,255,.1);
+  color: #f7fbff;
+}
+
+.theme-night .analysis-steps .done span,
+.theme-night .analysis-steps .current span {
+  background: #f7fbff;
+  color: #031827;
+}
+
+.theme-night .comic-frame {
+  border-color: rgba(120,221,235,.22);
+  background: radial-gradient(circle at 45% 30%,rgba(120,221,235,.2),transparent 34%),linear-gradient(145deg,#07131c,#020508);
+}
+
+.theme-night .publish-note,
+.theme-night .gentle-tip,
+.theme-night .ai-hint,
+.theme-night .focus-note {
+  border: 1px solid rgba(120,221,235,.16);
+  background: rgba(120,221,235,.09);
+  color: rgba(223,248,255,.86);
+}
+
+.theme-night .resonance-hero h1,
+.theme-night .recommend-heading h1,
+.theme-night .section-intro h1,
+.theme-night .story-form h1,
+.theme-night .analysis-stage h1 {
+  color: #f7fbff;
+}
+
+/* Final control unification: floating chrome, readable day/night states */
+.app-shell-header,
+.wizard-header.app-shell-header,
+.topbar.app-shell-header,
+.atlas-header.app-shell-header {
+  min-height: 68px;
+  height: 68px;
+  padding: 0 34px;
+  border-bottom: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.wizard-page,
+.resonance-page,
+.recommend-page {
+  position: relative;
+}
+
+.wizard-header.app-shell-header,
+.topbar.app-shell-header {
+  position: relative;
+  z-index: 20;
+}
+
+.app-lang-button.lang-button,
+.app-theme-button.theme-button,
+.topbar-actions .button.mini {
+  height: 40px;
+  min-height: 40px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 660;
+  letter-spacing: -0.015em;
+  border-color: rgba(5, 40, 62, .16);
+  color: #05283e;
+  background: rgba(255,255,255,.78);
+  box-shadow: 0 14px 34px rgba(6,109,168,.08), inset 0 1px 1px rgba(255,255,255,.86);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.app-theme-button.theme-button {
+  width: 40px;
+  padding: 0;
+}
+
+.app-lang-button.lang-button {
+  padding: 0 16px;
+  gap: 10px;
+}
+
+.app-lang-button .lang-primary {
+  color: #061f31;
+  font-weight: 760;
+}
+
+.app-lang-button .lang-secondary {
+  color: rgba(6,31,49,.46);
+  font-weight: 640;
+}
+
+.app-lang-button .lang-divider {
+  height: 18px;
+  background: rgba(6,31,49,.18);
+}
+
+.theme-night .app-shell-header,
+.theme-night.wizard-page .app-shell-header,
+.theme-night.resonance-page .app-shell-header,
+.theme-night.recommend-page .app-shell-header {
+  border-bottom: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.theme-night .app-lang-button.lang-button,
+.theme-night .app-theme-button.theme-button,
+.theme-night .topbar-actions .button.mini {
+  border-color: rgba(255,255,255,.16);
+  color: rgba(248,252,255,.92);
+  background: rgba(2,8,14,.48);
+  box-shadow: 0 18px 46px rgba(0,0,0,.28), inset 0 1px 1px rgba(255,255,255,.08);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.theme-night .app-lang-button .lang-primary {
+  color: #fff;
+}
+
+.theme-night .app-lang-button .lang-secondary {
+  color: rgba(255,255,255,.52);
+}
+
+.theme-night .app-lang-button .lang-divider {
+  background: rgba(255,255,255,.2);
+}
+
+.theme-night .topbar-actions .button.mini svg,
+.theme-night .app-theme-button svg {
+  color: currentColor;
+}
+
+.theme-night .report-dialog {
+  border: 1px solid rgba(255,255,255,.16);
+  color: #061f31;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 38px 100px rgba(0,0,0,.42);
+}
+
+.theme-night .report-dialog h2 {
+  color: #061f31;
+}
+
+.theme-night .report-dialog .button-ghost {
+  border-color: rgba(6,31,49,.16);
+  color: #061f31;
+  background: white;
+}
+
+.theme-night .report-dialog .button-primary {
+  background: #12aeea;
+  color: #fff;
+}
+
+.theme-night .confirm-story .editable-preview,
+.theme-night .editable-preview,
+.theme-night .editable-preview textarea {
+  color: #061f31;
+  background: rgba(255,255,255,.97);
+}
+
+.theme-night .editable-preview textarea {
+  border-color: rgba(6,31,49,.12);
+}
+
+.theme-night .preview-head h2,
+.theme-night .editable-preview textarea,
+.theme-night .story-body {
+  color: #263039;
+}
+
+.theme-night .preview-head button {
+  color: #0879bd;
+  background: white;
+}
+
+.mode-picker button {
+  min-height: 74px;
+  border-radius: 18px;
+  transition: transform 180ms ease, background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.mode-picker button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(6,109,168,.24);
+  box-shadow: 0 12px 28px rgba(6,109,168,.08);
+}
+
+.mode-picker button.selected {
+  background: #060606;
+  color: #fff;
+  border-color: #060606;
+  box-shadow: 0 18px 38px rgba(0,0,0,.18);
+}
+
+.mode-picker button.selected > span {
+  background: #95e9ff;
+  color: #061f31;
+}
+
+.theme-night .mode-picker button {
+  border-color: rgba(255,255,255,.16);
+  color: rgba(248,252,255,.9);
+  background: rgba(255,255,255,.08);
+}
+
+.theme-night .mode-picker button small,
+.theme-night .mode-picker button:not(.selected) b {
+  color: rgba(232,246,255,.72);
+}
+
+.theme-night .mode-picker button > span {
+  background: rgba(255,255,255,.12);
+  color: rgba(248,252,255,.88);
+}
+
+.theme-night .mode-picker button.selected {
+  background: #f8fcff;
+  color: #061f31;
+  border-color: rgba(255,255,255,.9);
+}
+
+.theme-night .mode-picker button.selected b,
+.theme-night .mode-picker button.selected small {
+  color: #061f31;
+}
+
+.theme-night .mode-picker button.selected > span {
+  background: #95e9ff;
+  color: #061f31;
+}
+
+.theme-night .choice-row button:not(.selected),
+.theme-night .chip-row button:not(.selected),
+.theme-night .mood-row button:not(.selected) {
+  background: rgba(255,255,255,.08);
+  color: rgba(248,252,255,.84);
+}
+
+.theme-night .choice-row button.selected,
+.theme-night .chip-row button.selected {
+  color: #061f31;
+}
+
+/* Detail QA pass: D/E/F readability, spacing, and lighter editorial scale */
+.section-intro h1,
+.guide-intro-copy h1,
+.story-form h1,
+.confirm-story h1,
+.resonance-hero h1,
+.recommend-heading h1 {
+  font-weight: 480;
+  letter-spacing: -0.045em;
+}
+
+.guide-intro-copy h1 {
+  max-width: 640px;
+  font-size: clamp(36px, 4vw, 58px);
+}
+
+.story-form h1 {
+  font-size: clamp(30px, 3vw, 42px);
+}
+
+.confirm-story h1,
+.resonance-hero h1,
+.recommend-heading h1 {
+  font-size: clamp(34px, 3.8vw, 56px);
+  line-height: 1.08;
+}
+
+.theme-night .guide-panel.selected {
+  background: linear-gradient(135deg, rgba(248,252,255,.98), rgba(239,248,252,.96));
+  border-color: rgba(255,255,255,.82);
+}
+
+.theme-night .guide-panel.selected .guide-content,
+.theme-night .guide-panel.selected .guide-content h2,
+.theme-night .guide-panel.selected .guide-content em,
+.theme-night .guide-panel.selected .guide-content p,
+.theme-night .guide-panel.selected .guide-side footer,
+.theme-night .guide-panel.selected .guide-content .guide-top small {
+  color: #061f31;
+}
+
+.theme-night .guide-panel.selected .guide-content p,
+.theme-night .guide-panel.selected .guide-side footer {
+  color: rgba(6,31,49,.58);
+}
+
+.theme-night .guide-panel.selected .guide-content .guide-side {
+  border-left-color: rgba(6,31,49,.22);
+}
+
+.theme-night .guide-panel.selected .guide-pick {
+  background: #95e9ff;
+  border-color: #95e9ff;
+  color: #061f31;
+}
+
+.theme-night .guide-content .guide-custom {
+  color: rgba(6,31,49,.72);
+}
+
+.theme-night .guide-content .guide-custom input {
+  border-color: rgba(6,31,49,.18);
+  background: rgba(255,255,255,.92);
+  color: #061f31;
+}
+
+.guide-panel {
+  flex-basis: clamp(74px, 6.8vw, 92px);
+}
+
+.small-title {
+  padding: 20px 0 24px;
+  gap: 18px;
+}
+
+.small-title span {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  flex: 0 0 auto;
+}
+
+.small-title p {
+  height: 242px;
+  font-size: 18px;
+  font-weight: 560;
+  letter-spacing: .06em;
+}
+
+.theme-night .small-title {
+  color: #050505;
+}
+
+.theme-night .small-title span {
+  background: #f8fcff;
+  color: #050505;
+}
+
+.theme-night .city-options {
+  border-color: rgba(6,31,49,.14);
+  background: rgba(255,255,255,.96);
+  color: #061f31;
+  box-shadow: 0 24px 70px rgba(0,0,0,.28);
+}
+
+.theme-night .city-options button {
+  color: #061f31;
+}
+
+.theme-night .city-options button.active {
+  background: #f3fbff;
+}
+
+.theme-night .city-options b {
+  color: #061f31;
+}
+
+.theme-night .city-options span,
+.theme-night .city-loading {
+  color: rgba(6,31,49,.58);
+}
+
+.confirm-story.story-page-editor {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.theme-night .confirm-story.story-page-editor {
+  background: transparent;
+  box-shadow: none;
+}
+
+.theme-night .confirm-story h1 {
+  text-shadow: 0 0 22px rgba(248,252,255,.18), 0 2px 22px rgba(0,0,0,.42);
+}
+
+.story-preview.editable-preview {
+  box-shadow: 0 20px 70px rgba(0,0,0,.08);
+}
+
+.theme-night .story-preview.editable-preview {
+  box-shadow: 0 28px 86px rgba(0,0,0,.24);
+}
+
+.dimension-title > span {
+  background: #95e9ff;
+  color: #061f31;
+}
+
+.theme-night .dimension-title > span {
+  background: #95e9ff;
+  color: #061f31;
+  box-shadow: 0 0 24px rgba(149,233,255,.22);
+}
 
 @media(max-width:1000px){
   .gateway-auth-card{grid-template-columns:1fr}.gateway-auth-visual{min-height:360px}.gateway-story-rail{width:190vw;margin-left:-45vw}.porthole{width:min(760px,88vw)}.intro-terminal{padding:34px 28px;min-height:380px}.preview-hero{margin-top:56px}.preview-gallery{width:170vw;margin-left:-35vw}.auth-shell-minimal{grid-template-columns:1fr}.auth-shell-minimal .auth-brand{min-height:420px}.ice-hero{grid-template-columns:1fr;padding-top:60px}.hero-copy{max-width:680px}.ice-orbit{height:600px}.auth-shell{grid-template-columns:1fr}.auth-brand{min-height:430px}.auth-form{padding:55px}.guide-grid{grid-template-columns:1fr 1fr}.collection-layout{grid-template-columns:1fr}.prompt-panel{position:relative;top:0}.confirm-layout{grid-template-columns:1fr}.dimension-grid{grid-template-columns:1fr}.dimension-card{display:grid;grid-template-columns:220px 1fr;align-items:center}.recommend-card.card-0,.recommend-card.card-1,.recommend-card.card-2,.recommend-card.card-3,.recommend-card.card-4{grid-column:span 6}.atlas-page{grid-template-columns:1fr}.sidebar{position:fixed;z-index:20;left:0;top:0;bottom:0;width:250px;transform:translateX(-100%);transition:.25s;box-shadow:20px 0 50px rgba(0,0,0,.12)}.sidebar.open{transform:none}.mobile-menu{display:grid;place-items:center}.atlas-cards{grid-template-columns:1fr 1fr}.story-modal{grid-template-columns:1fr;height:92vh;overflow:auto}.visual{grid-row:auto;min-height:260px}.story-content{overflow:visible}.story-actions{grid-column:1}.inline-resonance{grid-template-columns:1fr}

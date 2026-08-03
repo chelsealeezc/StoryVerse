@@ -1,5 +1,6 @@
-import { CSSProperties, Ref, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, Ref, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import generatedPortalBg from "./assets/auragate-portal-bg-transparent.png";
+import nightWorldBg from "./assets/storyverse-night-bg.png";
 
 const PORTAL_BG = generatedPortalBg;
 const WORLD_BG =
@@ -21,6 +22,79 @@ const introSlides = [
   ["欢迎来到这里", "和千万种声音共鸣", "也看到不同的人生"],
 ];
 
+const gatewayCopy = {
+  zh: {
+    homeAria: "回到 StoryVerse 首页",
+    introAria: "StoryVerse 开场介绍",
+    skip: "跳过",
+    scrollDown: "下滑",
+    heroPrefix: "Begin",
+    heroMain: "Your",
+    heroBrand: "StoryVerse",
+    heroBody: "各种意义上的异乡者，终会在这里相逢。",
+    partner: "和千万种声音共鸣，也看到不同的人生。",
+    previewTitle: ["真实故事。", "真实声音。"],
+    previewSubtitle: "在 StoryVerse，看见和你天差地别的故事，也看见和你如此相似的人。",
+    previousStory: "上一张故事卡片",
+    nextStory: "下一张故事卡片",
+    footerColumns: [
+      ["探索", "它如何运作", "故事星图"],
+      ["联系", "X（Twitter）", "hello@storyverse.com"],
+      ["法律", "隐私政策", "服务条款"],
+    ],
+    loginEyebrow: "进入 StoryVerse",
+    welcome: "欢迎来到",
+    signup: "注册",
+    login: "登录",
+    nickname: "昵称",
+    nicknamePlaceholder: "给自己起一个在 StoryVerse 中的名字吧",
+    email: "邮箱",
+    emailPlaceholder: "you@example.com",
+    password: "密码",
+    signupPasswordPlaceholder: "设置一个安全密码",
+    loginPasswordPlaceholder: "输入你的密码",
+    createAccount: "创建账户",
+    enter: "进入 StoryVerse",
+    already: "已经有账户？",
+    newHere: "第一次来到这里？",
+  },
+  en: {
+    homeAria: "Back to StoryVerse home",
+    introAria: "StoryVerse intro",
+    skip: "Skip",
+    scrollDown: "Scroll",
+    heroPrefix: "Begin",
+    heroMain: "Your",
+    heroBrand: "StoryVerse",
+    heroBody: "Strangers in every sense can still meet here.",
+    partner: "Resonate with countless voices, and see different lives.",
+    previewTitle: ["Real stories.", "Real voices."],
+    previewSubtitle: "In StoryVerse, meet stories far from yours and people unexpectedly close to you.",
+    previousStory: "Previous story card",
+    nextStory: "Next story card",
+    footerColumns: [
+      ["Explore", "How it works", "Story Map"],
+      ["Contact", "X (Twitter)", "hello@storyverse.com"],
+      ["Legal", "Privacy Policy", "Terms of Service"],
+    ],
+    loginEyebrow: "Step into StoryVerse",
+    welcome: "Welcome to",
+    signup: "Sign up",
+    login: "Log in",
+    nickname: "Nickname",
+    nicknamePlaceholder: "Choose a name for yourself in StoryVerse",
+    email: "Email",
+    emailPlaceholder: "you@example.com",
+    password: "Password",
+    signupPasswordPlaceholder: "Create a strong password",
+    loginPasswordPlaceholder: "Enter your password",
+    createAccount: "Create account",
+    enter: "Enter StoryVerse",
+    already: "Already have an account?",
+    newHere: "New here?",
+  },
+} as const;
+
 const clamp = (value: number, min = 0, max = 1) => Math.min(Math.max(value, min), max);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
@@ -39,7 +113,7 @@ function useIsMobile() {
   return isMobile;
 }
 
-function Wordmark({ isMobile, onClick }: { isMobile: boolean; onClick?: () => void }) {
+function Wordmark({ isMobile, onClick, ariaLabel = "回到 StoryVerse 首页" }: { isMobile: boolean; onClick?: () => void; ariaLabel?: string }) {
   const content = (
     <>
       <span
@@ -64,7 +138,7 @@ function Wordmark({ isMobile, onClick }: { isMobile: boolean; onClick?: () => vo
     </>
   );
   if (onClick) {
-    return <button type="button" style={{ ...styles.wordmark, ...styles.wordmarkButton }} onClick={onClick} aria-label="回到 StoryVerse 首页">{content}</button>;
+    return <button type="button" style={{ ...styles.wordmark, ...styles.wordmarkButton }} onClick={onClick} aria-label={ariaLabel}>{content}</button>;
   }
   return (
     <div style={styles.wordmark}>{content}</div>
@@ -78,6 +152,47 @@ function InlineLanguageSwitch({ language, onChange }: { language: "zh" | "en"; o
       <span style={styles.langDivider}>|</span>
       <button style={{ ...styles.langPart, color: language === "en" ? "#161616" : "rgba(22,22,22,0.42)" }} onClick={() => onChange("en")}>ENG</button>
     </div>
+  );
+}
+
+function UnifiedLanguageButton({ language, onChange }: { language: "zh" | "en"; onChange: (language: "zh" | "en") => void }) {
+  return (
+    <button
+      type="button"
+      className="neon-control lang-button"
+      aria-label={language === "zh" ? "切换语言" : "Switch language"}
+      onClick={() => onChange(language === "zh" ? "en" : "zh")}
+    >
+      <span className={language === "zh" ? "lang-primary" : "lang-secondary"}>中文</span>
+      <span className="lang-divider" />
+      <span className={language === "en" ? "lang-primary" : "lang-secondary"}>ENG</span>
+    </button>
+  );
+}
+
+function LoginWordmark({ isMobile }: { isMobile: boolean }) {
+  return (
+    <span style={styles.loginWordmarkLoose}>
+      <span
+        style={{
+          fontFamily: '"Mr Dafoe Regular", cursive',
+          fontSize: isMobile ? 30 : 46,
+          lineHeight: 0.8,
+        }}
+      >
+        Story
+      </span>
+      <span
+        style={{
+          fontSize: isMobile ? 21 : 34,
+          fontWeight: 500,
+          letterSpacing: "0.01em",
+          marginLeft: isMobile ? 2 : 5,
+        }}
+      >
+        Verse
+      </span>
+    </span>
   );
 }
 
@@ -132,8 +247,9 @@ function Chevron({ dir }: { dir: -1 | 1 }) {
   );
 }
 
-function ArcCardCarousel({ isMobile }: { isMobile: boolean }) {
+function ArcCardCarousel({ isMobile, language }: { isMobile: boolean; language: "zh" | "en" }) {
   const [active, setActive] = useState(Math.floor(quotes.length / 2));
+  const t = gatewayCopy[language];
   const total = quotes.length;
   const half = Math.floor(total / 2);
   const cardW = isMobile ? 230 : 270;
@@ -170,7 +286,7 @@ function ArcCardCarousel({ isMobile }: { isMobile: boolean }) {
               borderRadius: isMobile ? 22 : 28,
               opacity,
               zIndex: 100 - abs,
-              pointerEvents: "auto",
+              pointerEvents: abs <= 2 ? "auto" : "none",
               transform,
               background: isCenter
                 ? "rgb(247,251,255)"
@@ -202,8 +318,15 @@ function ArcCardCarousel({ isMobile }: { isMobile: boolean }) {
 
       <div style={styles.carouselNav}>
         <button
-          aria-label="Previous testimonial"
-          onClick={() => advance(-1)}
+          aria-label={t.previousStory}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            advance(-1);
+          }}
           style={{
             ...styles.carouselButton,
             width: isMobile ? 42 : 46,
@@ -216,8 +339,15 @@ function ArcCardCarousel({ isMobile }: { isMobile: boolean }) {
           <Chevron dir={-1} />
         </button>
         <button
-          aria-label="Next testimonial"
-          onClick={() => advance(1)}
+          aria-label={t.nextStory}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            advance(1);
+          }}
           style={{
             ...styles.carouselButton,
             width: isMobile ? 42 : 46,
@@ -234,9 +364,36 @@ function ArcCardCarousel({ isMobile }: { isMobile: boolean }) {
   );
 }
 
-export function Auragate({ language = "zh", onLanguageChange = () => {}, onHome, onComplete }: { language?: "zh" | "en"; onLanguageChange?: (language: "zh" | "en") => void; onHome?: () => void; onComplete: () => void }) {
+type GatewaySection = "intro" | "preview" | "auth";
+
+export function Auragate({
+  language = "zh",
+  onLanguageChange = () => {},
+  onHome,
+  onComplete,
+  section = "intro",
+  authMode = "signup",
+  onSectionChange,
+  onAuthModeChange,
+  themeMode = "day",
+  onThemeModeChange = () => {},
+}: {
+  language?: "zh" | "en";
+  onLanguageChange?: (language: "zh" | "en") => void;
+  onHome?: () => void;
+  onComplete: () => void;
+  section?: GatewaySection;
+  authMode?: "signup" | "login";
+  onSectionChange?: (section: GatewaySection) => void;
+  onAuthModeChange?: (mode: "signup" | "login") => void;
+  themeMode?: "day" | "night";
+  onThemeModeChange?: (themeMode: "day" | "night") => void;
+}) {
   const introRef = useRef<HTMLDivElement>(null);
   const loginRef = useRef<HTMLElement>(null);
+  const previewRef = useRef<HTMLElement>(null);
+  const skipRef = useRef<HTMLButtonElement>(null);
+  const downHintRef = useRef<HTMLButtonElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
   const scrollProgress = useRef(0);
@@ -245,11 +402,56 @@ export function Auragate({ language = "zh", onLanguageChange = () => {}, onHome,
   const [uiVisible, setUiVisible] = useState(false);
   const [progress, setProgress] = useState(0);
   const [portalLoaded, setPortalLoaded] = useState(true);
+  const t = gatewayCopy[language];
 
   useEffect(() => {
     const timer = window.setTimeout(() => setUiVisible(true), 600);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const target = section === "intro" ? introRef.current : section === "preview" ? previewRef.current : loginRef.current;
+    if (!target) return;
+    const frame = window.requestAnimationFrame(() => target.scrollIntoView({ behavior: "auto", block: "start" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [section]);
+
+  const goToSection = useCallback(
+    (nextSection: GatewaySection, behavior: ScrollBehavior = "smooth") => {
+      const target =
+        nextSection === "intro" ? introRef.current : nextSection === "preview" ? previewRef.current : loginRef.current;
+      onSectionChange?.(nextSection);
+      window.requestAnimationFrame(() => {
+        target?.scrollIntoView({ behavior, block: "start" });
+      });
+    },
+    [onSectionChange],
+  );
+
+  useEffect(() => {
+    const skipButton = skipRef.current;
+    const downHintButton = downHintRef.current;
+    const goAuth = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      goToSection("auth");
+    };
+    const goPreview = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      goToSection("preview");
+    };
+    skipButton?.addEventListener("pointerdown", goAuth);
+    skipButton?.addEventListener("click", goAuth);
+    downHintButton?.addEventListener("pointerdown", goPreview);
+    downHintButton?.addEventListener("click", goPreview);
+    return () => {
+      skipButton?.removeEventListener("pointerdown", goAuth);
+      skipButton?.removeEventListener("click", goAuth);
+      downHintButton?.removeEventListener("pointerdown", goPreview);
+      downHintButton?.removeEventListener("click", goPreview);
+    };
+  }, [goToSection]);
 
   useEffect(() => {
     const updateScroll = () => {
@@ -304,6 +506,7 @@ export function Auragate({ language = "zh", onLanguageChange = () => {}, onHome,
 
   const scene1Opacity = clamp(1 - progress / 0.22);
   const portalOpacity = progress <= 0.66 ? 1 : clamp(1 - (progress - 0.66) / 0.22);
+  const isNight = themeMode === "night";
 
   const visibleMotion = useMemo<CSSProperties>(
     () => ({
@@ -315,25 +518,46 @@ export function Auragate({ language = "zh", onLanguageChange = () => {}, onHome,
   );
 
   return (
-    <main style={styles.root}>
-      <div style={styles.worldLayer}>
+    <main style={{ ...styles.root, background: isNight ? "#000" : styles.root.background }}>
+      <div style={{ ...styles.worldLayer, background: isNight ? "#000" : undefined }}>
         <div ref={worldRef} style={styles.worldInner}>
-          <img src={WORLD_BG} alt="" style={styles.worldImage} />
+          <img
+            src={isNight ? nightWorldBg : WORLD_BG}
+            alt=""
+            style={{
+              ...styles.worldImage,
+              filter: isNight ? "contrast(1.08) saturate(0.9)" : styles.worldImage.filter,
+            }}
+          />
         </div>
       </div>
 
       <nav style={{ ...styles.nav, padding: isMobile ? "18px 20px" : "26px 40px" }}>
-        <Wordmark isMobile={isMobile} onClick={onHome} />
+        <Wordmark isMobile={isMobile} onClick={onHome} ariaLabel={t.homeAria} />
         <div style={styles.navActions}>
+          <button
+            type="button"
+            className="neon-control theme-button"
+            aria-label={language === "zh" ? "切换白天 / 深夜模式" : "Switch day / night mode"}
+            onClick={() => onThemeModeChange(isNight ? "day" : "night")}
+          >
+            {isNight ? "☀" : "☾"}
+          </button>
           {progress < 0.58 ? (
-            <button
-              style={{ ...styles.watchDemo, padding: isMobile ? "9px 16px" : "11px 22px" }}
-              onClick={() => loginRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-            >
-              Skip
-            </button>
+            <>
+              <button
+                ref={skipRef}
+                type="button"
+                style={{ ...styles.watchDemo, padding: isMobile ? "9px 16px" : "11px 22px" }}
+                onClick={() => goToSection("auth")}
+                onPointerDown={() => goToSection("auth")}
+              >
+                {t.skip}
+              </button>
+              <UnifiedLanguageButton language={language} onChange={onLanguageChange} />
+            </>
           ) : (
-            <InlineLanguageSwitch language={language} onChange={onLanguageChange} />
+              <UnifiedLanguageButton language={language} onChange={onLanguageChange} />
           )}
         </div>
       </nav>
@@ -368,11 +592,13 @@ export function Auragate({ language = "zh", onLanguageChange = () => {}, onHome,
             />
             <PortalIntro isMobile={isMobile} sceneOpacity={scene1Opacity} />
             <button
+              ref={downHintRef}
               type="button"
-              onClick={() => loginRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              onClick={() => goToSection("preview")}
+              onPointerDown={() => goToSection("preview")}
               style={{ ...styles.portalDownHint, opacity: scene1Opacity }}
             >
-              <span style={{ display: "inline-block", transform: "scaleX(1.45)" }}>↓</span> 下滑
+              <span style={{ display: "inline-block", transform: "scaleX(1.45)" }}>↓</span> {t.scrollDown}
             </button>
           </div>
 
@@ -394,50 +620,53 @@ export function Auragate({ language = "zh", onLanguageChange = () => {}, onHome,
                   fontSize: isMobile ? "clamp(30px,9vw,44px)" : "clamp(40px,4vw,58px)",
                 }}
               >
-                <span style={styles.discover}>Begin</span>Your
+                <span style={styles.discover}>{t.heroPrefix}</span>{t.heroMain}
                 <br />
-                StoryVerse
+                {t.heroBrand}
               </h1>
               <p style={styles.heroBody}>
-                各种意义上的异乡者，终会在这里相逢。
+                {t.heroBody}
               </p>
             </div>
 
             {!isMobile && (
               <div style={styles.partner}>
                 <span style={styles.partnerMark}>S.</span>
-                <p style={styles.partnerCopy}>和千万种声音共鸣，也看到不同的人生。</p>
+                <p style={styles.partnerCopy}>{t.partner}</p>
               </div>
             )}
           </div>
         </div>
       </section>
 
-      <section style={{ ...styles.sectionTwo, paddingTop: isMobile ? "12vh" : "14vh" }}>
+      <section ref={previewRef} style={{ ...styles.sectionTwo, paddingTop: isMobile ? "12vh" : "14vh" }}>
         <div style={styles.sectionHeader}>
           <h2 style={{ ...styles.sectionTitle, fontSize: "clamp(34px,4vw,52px)" }}>
-            Real stories.
+            {t.previewTitle[0]}
             <br />
-            Real voices.
+            {t.previewTitle[1]}
           </h2>
           <p style={styles.sectionSubtitle}>
-            在 StoryVerse，看见和你天差地别的故事，也看见和你如此相似的人。
+            {t.previewSubtitle}
           </p>
         </div>
-        <ArcCardCarousel isMobile={isMobile} />
-        <ImmersiveLogin isMobile={isMobile} onComplete={onComplete} ref={loginRef} />
-        <Footer isMobile={isMobile} />
+        <ArcCardCarousel isMobile={isMobile} language={language} />
+        <ImmersiveLogin
+          isMobile={isMobile}
+          onComplete={onComplete}
+          ref={loginRef}
+          mode={authMode}
+          language={language}
+          onModeChange={mode => onAuthModeChange?.(mode)}
+        />
+        <Footer isMobile={isMobile} language={language} />
       </section>
     </main>
   );
 }
 
-function Footer({ isMobile }: { isMobile: boolean }) {
-  const columns = [
-    ["Explore", "How it works", "Story Map"],
-    ["Contact", "X (Twitter)", "hello@storyverse.com"],
-    ["Legal", "Privacy Policy", "Terms of Service"],
-  ];
+function Footer({ isMobile, language }: { isMobile: boolean; language: "zh" | "en" }) {
+  const columns = gatewayCopy[language].footerColumns;
 
   return (
     <footer style={{ ...styles.footer, padding: isMobile ? "120px 22px 40px" : "160px 44px 52px" }}>
@@ -469,61 +698,85 @@ function Footer({ isMobile }: { isMobile: boolean }) {
   );
 }
 
-function ImmersiveLogin({ isMobile, onComplete, ref }: { isMobile: boolean; onComplete: () => void; ref: Ref<HTMLElement> }) {
-  const [mode, setMode] = useState<"signup" | "login">("signup");
+function ImmersiveLogin({ isMobile, onComplete, ref, mode, language, onModeChange }: {
+  isMobile: boolean;
+  onComplete: () => void;
+  ref: Ref<HTMLElement>;
+  mode: "signup" | "login";
+  language: "zh" | "en";
+  onModeChange: (mode: "signup" | "login") => void;
+}) {
+  const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const valid = email.includes("@") && password.length >= 6;
+  const valid = email.includes("@") && password.length >= 6 && (mode === "login" || nickname.trim().length >= 2);
+  const t = gatewayCopy[language];
 
   return (
     <section ref={ref} style={{ ...styles.loginSection, padding: isMobile ? "92px 22px 40px" : "132px 44px 36px" }}>
       <div style={{ ...styles.loginPanel, gridTemplateColumns: isMobile ? "1fr" : "1fr 420px", minHeight: isMobile ? "auto" : "min(720px,78vh)" }}>
         <div style={styles.loginCopy}>
-          <p style={styles.loginEyebrow}>Step into StoryVerse</p>
-          <h2 style={{ ...styles.loginTitle, fontSize: isMobile ? 42 : 64 }}>
-            欢迎来到 <span style={{ display: "inline-flex", verticalAlign: "baseline" }}><Wordmark isMobile={isMobile} /></span>
+          <p style={styles.loginEyebrow}>{t.loginEyebrow}</p>
+          <h2 style={{ ...styles.loginTitle, fontSize: isMobile ? 44 : 72 }}>
+            <span style={styles.welcomeLight}>{t.welcome}</span>
+            <span style={styles.loginWordmarkLine}><LoginWordmark isMobile={isMobile} /></span>
           </h2>
         </div>
         <div style={styles.authCard}>
           <div style={styles.segmented}>
             <button
-              style={{ ...styles.segmentButton, background: mode === "signup" ? "#fff" : "transparent", color: mode === "signup" ? "#151515" : "rgba(255,255,255,0.64)" }}
-              onClick={() => setMode("signup")}
+              style={{ ...styles.segmentButton, background: mode === "signup" ? "#fff" : "transparent", color: mode === "signup" ? "#151515" : "#0b8fe8" }}
+              onClick={() => onModeChange("signup")}
             >
-              Sign up
+              {t.signup}
             </button>
             <button
-              style={{ ...styles.segmentButton, background: mode === "login" ? "#fff" : "transparent", color: mode === "login" ? "#151515" : "rgba(255,255,255,0.64)" }}
-              onClick={() => setMode("login")}
+              style={{ ...styles.segmentButton, background: mode === "login" ? "#fff" : "transparent", color: mode === "login" ? "#151515" : "#0b8fe8" }}
+              onClick={() => onModeChange("login")}
             >
-              Log in
+              {t.login}
             </button>
           </div>
+          {mode === "signup" && (
+            <label style={styles.fieldLabel}>
+              {t.nickname}
+              <input
+                style={styles.inputShell}
+                value={nickname}
+                onChange={(event) => setNickname(event.target.value)}
+                type="text"
+                placeholder={t.nicknamePlaceholder}
+              />
+            </label>
+          )}
           <label style={styles.fieldLabel}>
-            Email
+            {t.email}
             <input
               style={styles.inputShell}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               type="email"
-              placeholder="you@example.com"
+              placeholder={t.emailPlaceholder}
             />
           </label>
           <label style={styles.fieldLabel}>
-            Password
+            {t.password}
             <input
               style={styles.inputShell}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               type="password"
-              placeholder={mode === "signup" ? "Create a strong password" : "Enter your password"}
+              placeholder={mode === "signup" ? t.signupPasswordPlaceholder : t.loginPasswordPlaceholder}
             />
           </label>
           <button style={{ ...styles.primaryButton, opacity: valid ? 1 : 0.48, cursor: valid ? "pointer" : "not-allowed" }} disabled={!valid} onClick={onComplete}>
-            {mode === "signup" ? "Create account" : "Enter StoryVerse"}
+            {mode === "signup" ? t.createAccount : t.enter}
           </button>
           <p style={styles.loginHint}>
-            {mode === "signup" ? "Already have an account? Log in" : "New here? Create your first account"}
+            {mode === "signup" ? `${t.already} ` : `${t.newHere} `}
+            <button type="button" style={styles.loginHintLink} onClick={() => onModeChange(mode === "signup" ? "login" : "signup")}>
+              {mode === "signup" ? t.login : t.signup}
+            </button>
           </p>
         </div>
       </div>
@@ -605,7 +858,7 @@ const styles: Record<string, CSSProperties> = {
   navActions: {
     display: "flex",
     alignItems: "center",
-    gap: 0,
+    gap: 14,
     pointerEvents: "auto",
   },
   watchDemo: {
@@ -874,6 +1127,8 @@ const styles: Record<string, CSSProperties> = {
     transform: "translateX(-50%)",
     display: "flex",
     gap: 10,
+    zIndex: 999,
+    pointerEvents: "auto",
   },
   carouselButton: {
     border: 0,
@@ -918,12 +1173,28 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
   },
   loginTitle: {
-    margin: "48px 0 0",
+    margin: "50px 0 0",
     color: "#fff",
     fontWeight: 500,
-    lineHeight: 1.06,
-    letterSpacing: "-0.055em",
+    lineHeight: 1.02,
+    letterSpacing: "-0.045em",
     textShadow: "0 2px 24px rgba(0,0,0,0.26)",
+  },
+  welcomeLight: {
+    display: "block",
+    fontWeight: 300,
+    letterSpacing: "-0.04em",
+  },
+  loginWordmarkLine: {
+    display: "block",
+    marginTop: 24,
+    transformOrigin: "left center",
+  },
+  loginWordmarkLoose: {
+    display: "inline-flex",
+    alignItems: "baseline",
+    color: "#fff",
+    whiteSpace: "nowrap",
   },
   loginBody: {
     maxWidth: 520,
@@ -936,7 +1207,7 @@ const styles: Record<string, CSSProperties> = {
   authCard: {
     border: "1px solid rgba(255,255,255,0.46)",
     borderRadius: 34,
-    padding: 24,
+    padding: "24px 26px 28px",
     background: "rgba(255,255,255,0.2)",
     backdropFilter: "blur(26px) saturate(150%)",
     WebkitBackdropFilter: "blur(26px) saturate(150%)",
@@ -950,7 +1221,7 @@ const styles: Record<string, CSSProperties> = {
     gap: 4,
     borderRadius: 999,
     background: "rgba(255,255,255,0.16)",
-    marginBottom: 26,
+    marginBottom: 24,
   },
   segmentButton: {
     border: 0,
@@ -961,7 +1232,7 @@ const styles: Record<string, CSSProperties> = {
   },
   fieldLabel: {
     display: "block",
-    marginTop: 18,
+    marginTop: 16,
     color: "rgba(255,255,255,0.9)",
     fontSize: 13,
     fontWeight: 700,
@@ -982,7 +1253,7 @@ const styles: Record<string, CSSProperties> = {
   primaryButton: {
     width: "100%",
     height: 56,
-    marginTop: 28,
+    marginTop: 26,
     border: 0,
     borderRadius: 18,
     background: "#0057ff",
@@ -996,6 +1267,14 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     color: "rgba(255,255,255,0.66)",
     fontSize: 13,
+  },
+  loginHintLink: {
+    border: 0,
+    padding: 0,
+    background: "transparent",
+    color: "#0078ff",
+    fontWeight: 800,
+    cursor: "pointer",
   },
   footerGrid: {
     maxWidth: 1280,

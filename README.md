@@ -1,40 +1,110 @@
 # StoryVerse
 
-StoryVerse 是一个帮助普通用户整理、理解并连接真实生活经验的叙事探索产品。
+StoryVerse 是一个围绕真实人生经历展开的叙事共鸣产品。它希望帮助用户写下自己的故事，也在故事星图中遇见与自己相似或截然不同的人生。
+
+当前版本重点服务于前端体验验证：从沉浸式入口、故事生态预览、登录注册、首故事输入，到 AI 整理、共鸣选择和 3D 星图浏览，形成一条完整的产品体验链路。
 
 ## 在线预览
 
-公开部署网页：
+公开网页：
 
 [https://chelsealeezc.github.io/StoryVerse/](https://chelsealeezc.github.io/StoryVerse/)
 
-> 当前部署由 GitHub Pages 自动发布。合并到 `main` 后，`.github/workflows/pages.yml` 会构建并更新线上页面。
+当前主要迭代分支：
 
-## 当前体验范围
+[frontend-polish](https://github.com/chelsealeezc/StoryVerse/tree/frontend-polish)
 
-当前版本是 StoryVerse 的前端交互原型，重点验证：
+> GitHub Pages 由 `.github/workflows/pages.yml` 自动构建并发布。当前工作流支持从 `main` 和 `frontend-polish` 分支触发部署。
 
-- Gateway Intro 沉浸式舷窗入口
-- Previewing 故事生态预览
-- 登录 / 注册入口
-- 首故事输入流程
-- 本地草稿保存与专注模式
-- AI 整理结果与确认发布页
-- 城市、人生阶段、主题三维共鸣选择
-- 轻量星图 / 卡片式故事浏览
-- 喜欢、不喜欢、关闭与举报反馈闭环
+## 当前体验流程
 
-## Local development
+```text
+Gateway Intro
+  ↓
+Previewing 故事生态预览
+  ↓
+注册 / 登录
+  ↓
+首故事输入流程
+  ↓
+AI 整理与确认发布
+  ↓
+三维共鸣选择
+  ↓
+StoryVerse 3D 星图主页面
+```
+
+## 页面模块
+
+- A｜Gateway Intro：沉浸式舷窗入口，逐行文案显现，支持跳过。
+- B｜Previewing：故事生态预览，弧形故事卡片 carousel。
+- C｜注册与登录：支持中英文切换，包含昵称、邮箱、密码输入。
+- D｜Story Input Wizard：人生事件引导、故事正文输入、草稿保存、专注模式、城市搜索与坐标解析、AI 分析结果确认。
+- E｜共鸣选择与 StoryVerse 星图：城市、人生阶段、主题三维共鸣选择；3D 星图浏览；属性调整；故事浮层卡片。
+- F｜故事浏览与反馈：故事浏览、喜欢 / 不喜欢、关闭与举报等反馈闭环。
+
+## 近期前端重点
+
+- 全站支持中英文切换。
+- 全站支持白天 / 深夜模式。
+- ABC 页面使用沉浸式蓝天 / 星空视觉系统。
+- DE 页面适配深夜模式，确保文本、输入框、弹窗和按钮可读。
+- E 星图页接入 Three.js / React Three Fiber 3D 星图。
+- E 星图「调整属性」支持读取共鸣选择、临时修改、确认后更新星图分布。
+- 右上角语言、日夜、搜索等常驻控件统一为轻量玻璃态按钮。
+
+## 技术栈
+
+- React 18
+- TypeScript
+- Vite
+- Three.js
+- React Three Fiber
+- Drei
+- React Three Postprocessing
+- GSAP
+- Lucide React
+
+## 本地开发
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Production build
+默认本地开发地址通常为：
+
+[http://127.0.0.1:4173/](http://127.0.0.1:4173/)
+
+## 本地预览生产构建
+
+```bash
+npm run build
+npm run preview -- --host 127.0.0.1 --port 4174
+```
+
+本地预览地址：
+
+[http://127.0.0.1:4174/](http://127.0.0.1:4174/)
+
+## 构建
 
 ```bash
 npm run build
 ```
 
-产品规则与第一阶段范围见 [prd.md](./prd.md)。
+构建产物会输出到 `dist/`，并复制 `dist/index.html` 为 `dist/404.html`，用于 GitHub Pages 的 SPA 路由回退。
+
+## 部署
+
+推送到 `main` 或 `frontend-polish` 后，GitHub Actions 会自动运行：
+
+```bash
+npm ci
+npm run build
+```
+
+部署完成后访问：
+
+[https://chelsealeezc.github.io/StoryVerse/](https://chelsealeezc.github.io/StoryVerse/)
+

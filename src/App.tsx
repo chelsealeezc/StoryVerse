@@ -9,8 +9,11 @@ import { guides, icebreakers, mockAnalysis, stories } from "./data";
 import { formatCoords, geocodePlace, searchPlaces } from "./places";
 import { initialState, loadState, saveState } from "./storage";
 import { Auragate as PrototypeGateway } from "./PrototypeGateway";
+import { StoryGalaxy } from "./StoryGalaxy";
 import type { PlaceSuggestion } from "./places";
 import type { AppState, Draft, Language, Reaction, ResonanceMode, Story } from "./types";
+
+type ThemeMode = "day" | "night";
 
 const themeColors: Record<string, string> = {
   家庭: "#ff5b45", 成长: "#b8eb00", 迁移: "#1769ff", 关系: "#ffcc23",
@@ -25,6 +28,51 @@ const blankPrompts = [
   "有没有一件事，让现在的你和以前不一样？",
   "没有思路？看一下旁边的例子吧～=(^.^)=",
 ];
+
+const routeMap = {
+  intro: "/",
+  storyStart: "/StoryStart",
+  storyWrite: "/StoryWrite",
+  storyAnalyzing: "/StoryAnalyzing",
+  storyPage: "/StoryPage",
+  resonance: "/Resonance",
+  recommendations: "/Recommendations",
+  starLobby: "/StarLobby",
+} as const;
+const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function externalPath(path: string) {
+  return appBase && appBase !== "/" ? `${appBase}${path === "/" ? "/" : path}` : path;
+}
+
+function normalizedPath(pathname = window.location.pathname) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return path.startsWith("/StoryVerse/") ? path.slice("/StoryVerse".length) || "/" : path;
+}
+
+function routePatchFromPath(pathname = window.location.pathname): Partial<AppState> & { gatewaySection?: "intro" | "preview" | "auth"; authMode?: "signup" | "login" } {
+  const path = normalizedPath(pathname);
+  if (path === routeMap.storyStart) return { screen: "wizard", wizardStep: 0 };
+  if (path === routeMap.storyWrite) return { screen: "wizard", wizardStep: 1 };
+  if (path === routeMap.storyAnalyzing) return { screen: "wizard", wizardStep: 2 };
+  if (path === routeMap.storyPage) return { screen: "wizard", wizardStep: 3 };
+  if (path === routeMap.resonance) return { screen: "resonance" };
+  if (path === routeMap.recommendations) return { screen: "recommendations" };
+  if (path === routeMap.starLobby) return { screen: "atlas" };
+  return { screen: "intro", gatewaySection: "intro" };
+}
+
+function pathFromState(state: AppState, gatewaySection: "intro" | "preview" | "auth", authMode: "signup" | "login") {
+  if (state.screen === "wizard") {
+    return [routeMap.storyStart, routeMap.storyWrite, routeMap.storyAnalyzing, routeMap.storyPage][state.wizardStep] ?? routeMap.storyStart;
+  }
+  if (state.screen === "resonance") return routeMap.resonance;
+  if (state.screen === "recommendations") return routeMap.recommendations;
+  if (state.screen === "atlas") return routeMap.starLobby;
+  void gatewaySection;
+  void authMode;
+  return routeMap.intro;
+}
 
 const copy = {
   zh: {
@@ -76,10 +124,17 @@ const copy = {
 } satisfies Record<Language, Record<string, string>>;
 
 function LanguageSelect({ language, onChange }: { language: Language; onChange: (language: Language) => void }) {
-  return <div className="language-select" aria-label="Language">
-    <button className={language === "zh" ? "active" : ""} onClick={() => onChange("zh")}>中文</button>
-    <button className={language === "en" ? "active" : ""} onClick={() => onChange("en")}>EN</button>
-  </div>;
+  return <button type="button" className="neon-control lang-button app-lang-button" aria-label={language === "zh" ? "切换语言" : "Switch language"} onClick={() => onChange(language === "zh" ? "en" : "zh")}>
+    <span className={language === "zh" ? "lang-primary" : "lang-secondary"}>中文</span>
+    <span className="lang-divider" />
+    <span className={language === "en" ? "lang-primary" : "lang-secondary"}>ENG</span>
+  </button>;
+}
+
+function ThemeToggle({ language, themeMode, onChange }: { language: Language; themeMode: ThemeMode; onChange: (themeMode: ThemeMode) => void }) {
+  return <button type="button" className="neon-control theme-button app-theme-button" aria-label={language === "zh" ? "切换白天 / 深夜模式" : "Switch day / night mode"} onClick={() => onChange(themeMode === "night" ? "day" : "night")}>
+    {themeMode === "night" ? "☀" : "☾"}
+  </button>;
 }
 
 function Logo({ compact = false, onClick, inverted = false }: { compact?: boolean; onClick?: () => void; inverted?: boolean }) {
@@ -564,8 +619,8 @@ function CityField({ draft, setDraft, label }: { draft: Draft; setDraft: (patch:
   );
 }
 
-function Wizard({ state, update, onPublished, onHome }: {
-  state: AppState; update: AppUpdate; onPublished: () => void; onHome: () => void;
+function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChange }: {
+  state: AppState; update: AppUpdate; onPublished: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void;
 }) {
   const step = state.wizardStep;
   const draft = state.draft;
@@ -579,6 +634,8 @@ function Wizard({ state, update, onPublished, onHome }: {
   const [pasteDialog, setPasteDialog] = useState(false);
   const [leaveTarget, setLeaveTarget] = useState<number | null>(null);
   const [editingBody, setEditingBody] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string[]>>({});
   const hints = useMemo(() => extractHints(draft.body), [draft.body]);
   const mounted = useRef(false);
 
@@ -640,6 +697,10 @@ function Wizard({ state, update, onPublished, onHome }: {
     const done = window.setTimeout(() => update({ analysis: mockAnalysis }), 2500);
     return () => { timers.forEach(clearTimeout); clearTimeout(done); };
   }, [step]);
+  useEffect(() => {
+    if (!state.analysis) return;
+    setTagDrafts(Object.fromEntries(Object.entries(state.analysis.tags).map(([layer, tags]) => [layer, tags.slice(0, 3)])));
+  }, [state.analysis]);
 
   const choosePerson = (person: string) => {
     const people = draft.people.includes(person) ? draft.people.filter(p => p !== person) : [...draft.people, person];
@@ -665,18 +726,37 @@ function Wizard({ state, update, onPublished, onHome }: {
     if (leaveTarget !== null) update({ wizardStep: leaveTarget });
     setLeaveTarget(null);
   };
-  const canContinueCollection = draft.body.trim().length >= 20 && draft.city && draft.time && draft.mood;
+  const missingCollection = [
+    draft.body.trim().length < 100 ? "故事至少 100 字" : "",
+    !draft.mood ? "选择写完后的感受" : "",
+    !draft.time ? "选择故事发生时间" : "",
+    !draft.city ? "选择城市" : "",
+    draft.people.length === 0 ? "选择故事里有谁" : "",
+  ].filter(Boolean);
+  const canContinueCollection = missingCollection.length === 0;
   const canContinueGuide = !!draft.guide && (draft.guide !== "other" || draft.customGuide.trim().length >= 2);
   const savedTime = draft.savedAt ? new Date(draft.savedAt).toLocaleTimeString(language === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" }) : "";
   const showCityHint = !!hints.city && hints.city.name !== draft.city;
   const showAgeHint = hints.age !== null && String(hints.age) !== draft.age;
+  const presetTags: Record<string, string[]> = {
+    topic: ["成长", "关系", "迁移", "家庭", "身份"],
+    emotion: ["平静", "释然", "想念", "勇敢", "遗憾"],
+    meaning: ["自我理解", "边界", "选择", "告别", "重新开始"],
+  };
+  const removeTag = (layer: string, tag: string) => setTagDrafts(previous => ({ ...previous, [layer]: (previous[layer] ?? []).filter(item => item !== tag) }));
+  const addTag = (layer: string, custom = false) => setTagDrafts(previous => {
+    const current = previous[layer] ?? [];
+    if (current.length >= 3) return previous;
+    const nextTag = custom ? "其他" : (presetTags[layer] ?? []).find(tag => !current.includes(tag)) ?? "其他";
+    return { ...previous, [layer]: current.includes(nextTag) ? current : [...current, nextTag].slice(0, 3) };
+  });
 
   return (
-    <main className={`wizard-page ${focusMode && step === 1 ? "focus-mode-page" : ""}`}>
+    <main className={`wizard-page ${themeMode === "night" ? "theme-night" : ""} ${focusMode && step === 1 ? "focus-mode-page" : ""}`}>
       {!(focusMode && step === 1) && <header className="wizard-header app-shell-header">
         <Logo onClick={onHome} />
         <div />
-        <div className="wizard-tools"><LanguageSelect language={language} onChange={language => update({ language })} /></div>
+        <div className="wizard-tools"><ThemeToggle language={language} themeMode={themeMode} onChange={onThemeModeChange} /><LanguageSelect language={language} onChange={language => update({ language })} /></div>
       </header>}
 
       {step === 0 && (
@@ -706,7 +786,7 @@ function Wizard({ state, update, onPublished, onHome }: {
               <p>{guide?.examples}</p>
             </div>
             <div className="save-state" data-status={saveStatus}>
-              {saveStatus === "editing" ? <><i className="save-dot" /> 正在写…</>
+                {saveStatus === "editing" ? <><i className="save-dot" /> {language === "zh" ? "正在写…" : "Writing…"}</>
                 : saveStatus === "saved" ? <><Check size={15} /> {t.saved} · {savedTime}</>
                 : <><Check size={15} /> 内容会自动保存在这台设备上</>}
             </div>
@@ -715,8 +795,8 @@ function Wizard({ state, update, onPublished, onHome }: {
             <div className="story-form-title">
               <div><p className="eyebrow">{t.storyStep}</p><h1>{language === "zh" ? <>顺着想法，<span className="serif">慢慢写。</span></> : t.storyH1}</h1></div>
               <div className="story-input-tools">
-                <button className="tool-line-button" title="语音转文字将在后续版本开放"><Mic size={18} /><span>语音输入</span></button>
-                <button className="tool-line-button focus-line" onClick={() => setFocusMode(value => !value)}><span className={`switch ${focusMode ? "on" : ""}`}><i /></span><span>开启专注模式</span></button>
+                <button className="tool-line-button" title={language === "zh" ? "语音转文字将在后续版本开放" : "Speech-to-text will be available in a later version"}><Mic size={18} /><span>{language === "zh" ? "语音输入" : "Voice input"}</span></button>
+                <button className="tool-line-button focus-line" onClick={() => setFocusMode(value => !value)}><span className={`switch ${focusMode ? "on" : ""}`}><i /></span><span>{language === "zh" ? "开启专注模式" : "Turn on focus mode"}</span></button>
               </div>
             </div>
             <label><span className="field-name">{t.title} <small>{t.optional}</small></span><input value={draft.title} onChange={e => setDraft({ title: e.target.value, edits: draft.edits + 1 })} placeholder={t.titleHint} /></label>
@@ -727,7 +807,7 @@ function Wizard({ state, update, onPublished, onHome }: {
             }} onChange={e => setDraft({ body: e.target.value, edits: draft.edits + 1 })} placeholder={draft.body ? "" : blankPrompts[idlePromptIndex]} /><span className={`count ${draft.body.length > 1500 ? "warn" : ""}`}>{draft.body.length} / {t.count}</span></label>
             {resting && <div className="gentle-tip">{t.restTip}</div>}
             {draft.body.length > 0 && draft.body.length < 100 && !resting && <div className="gentle-tip">{t.gentleTip}</div>}
-            {focusMode && <p className="focus-note">按 Esc 或再点一次开关，随时退出专注模式。</p>}
+            {focusMode && <p className="focus-note">{language === "zh" ? "按 Esc 或再点一次开关，随时退出专注模式。" : "Press Esc or toggle the switch again to leave focus mode anytime."}</p>}
             <div className="meta-fields">
               <div className="field-group"><span className="field-label">{t.mood}</span><div className="choice-row mood-row">{["沉重", "平静", "还好", "轻松", "温暖"].map((x, i) => <button className={draft.mood === x ? "selected" : ""} onClick={() => setDraft({ mood: x })} key={x}><b>{["☂", "◌", "○", "☀", "♥"][i]}</b>{x}</button>)}</div></div>
               <div className="field-grid">
@@ -755,7 +835,19 @@ function Wizard({ state, update, onPublished, onHome }: {
               )}
               <div className="field-group"><span className="field-label">{t.people} <small>{t.multi}</small></span><div className="chip-row">{["自己", "家人", "恋人", "朋友", "陌生人", "老师", "同事"].map(x => <button className={draft.people.includes(x) ? "selected" : ""} onClick={() => choosePerson(x)} key={x}>{x}</button>)}</div></div>
             </div>
-            {!focusMode && <div className="stage-actions split story-submit-only"><span className="completion-hint">完善时间、城市、心情后，就可以生成你的故事页面。</span><PrimaryButton disabled={!canContinueCollection} onClick={() => { setFocusMode(false); update({ wizardStep: 2 }); }}>{t.ai}</PrimaryButton></div>}
+            {!focusMode && <div className="stage-actions split story-submit-only">
+              <span className={`completion-hint ${submitAttempted && !canContinueCollection ? "warn" : ""}`}>
+                {submitAttempted && !canContinueCollection ? (language === "zh" ? `还差一点：${missingCollection.join("、")}。` : `Almost there: ${missingCollection.join(", ")}.`) : (language === "zh" ? "完善故事信息后，就可以生成你的故事页面。" : "Complete the story details to generate your story page.")}
+              </span>
+              <PrimaryButton onClick={() => {
+                if (!canContinueCollection) {
+                  setSubmitAttempted(true);
+                  return;
+                }
+                setFocusMode(false);
+                update({ wizardStep: 2 });
+              }}>{t.ai}</PrimaryButton>
+            </div>}
           </div>
         </section>
       )}
@@ -763,23 +855,23 @@ function Wizard({ state, update, onPublished, onHome }: {
       {step === 2 && (
         <section className="analysis-stage">
           <div className="analysis-orbit"><span className="pulse-star">✦</span>{[0,1,2].map(i => <i key={i} className={`analysis-ring ring-${i}`} />)}</div>
-          <p className="eyebrow">AI 只整理，不改写</p>
-          <h1>{state.analysis ? "每段故事，都值得被认真倾听" : "正在认真听你的故事……"}</h1>
+          <p className="eyebrow">{language === "zh" ? "AI 只整理，不改写" : "AI organizes, never rewrites"}</p>
+          <h1>{state.analysis ? (language === "zh" ? "每段故事，都值得被认真倾听" : "Every story deserves to be heard with care") : (language === "zh" ? "正在认真听你的故事……" : "Listening carefully to your story…")}</h1>
           <div className="analysis-steps analysis-steps-copy">
             {[
-              ["Step 1", "", "正在整理你的故事……"],
-              ["Step 2", "", "正在理解故事内容……"],
-              ["Step 3", "", "正在创作你的专属故事画册……"],
-            ].map(([stepLabel, enLabel, label], i) => <div className={analysisStage > i || state.analysis ? "done" : i === analysisStage ? "current" : ""} key={label}><span>{analysisStage > i || state.analysis ? <Check size={15} /> : i + 1}</span><b>{stepLabel}{analysisStage > i || state.analysis ? " ✓" : ""} {enLabel}</b><small>{label}</small></div>)}
+              [language === "zh" ? "步骤 1" : "Step 1", "", language === "zh" ? "正在整理你的故事……" : "Organizing your story…"],
+              [language === "zh" ? "步骤 2" : "Step 2", "", language === "zh" ? "正在理解故事内容……" : "Understanding the story…"],
+              [language === "zh" ? "步骤 3" : "Step 3", "", language === "zh" ? "正在创作你的专属故事画册……" : "Creating your personal story album…"],
+            ].map(([stepLabel, enLabel, label], i) => <div className={analysisStage > i || state.analysis ? "done" : i === analysisStage ? "current" : ""} key={label}><span>{analysisStage > i || state.analysis ? <Check size={15} /> : i + 1}</span><b>{stepLabel} {enLabel}</b><small>{label}</small></div>)}
           </div>
           <div className="analysis-detect">
-            <span>已识别</span>
-            <b><MapPin size={13} /> {draft.city || "未填写城市"}</b>
-            <b>{draft.age ? `${draft.age} 岁` : "未填写年龄"}</b>
+            <span>{language === "zh" ? "已识别" : "Detected"}</span>
+            <b><MapPin size={13} /> {draft.city || (language === "zh" ? "未填写城市" : "City missing")}</b>
+            <b>{draft.age ? `${draft.age} ${language === "zh" ? "岁" : "years old"}` : (language === "zh" ? "未填写年龄" : "Age missing")}</b>
             {draft.cityLat !== null && <b>{formatCoords(draft.cityLat, draft.cityLon)}</b>}
           </div>
-          <p className="analysis-quote">“每段故事，都值得被认真倾听。”</p>
-          {state.analysis && <PrimaryButton onClick={() => update({ wizardStep: 3 })}>查收你的故事页面</PrimaryButton>}
+          <p className="analysis-quote">{language === "zh" ? "“每段故事，都值得被认真倾听。”" : "“Every story deserves to be heard with care.”"}</p>
+          {state.analysis && <PrimaryButton onClick={() => update({ wizardStep: 3 })}>{language === "zh" ? "查收你的故事页面" : "Open your story page"}</PrimaryButton>}
         </section>
       )}
 
@@ -797,8 +889,12 @@ function Wizard({ state, update, onPublished, onHome }: {
             <article className="story-preview editable-preview"><div className="preview-head"><h2>{draft.title || state.analysis.suggestedTitle}</h2><button onClick={() => setEditingBody(!editingBody)}>{editingBody ? t.doneEdit : t.editBody}</button></div>{editingBody ? <textarea value={draft.body} onChange={e => setDraft({ body: e.target.value, edits: draft.edits + 1 })} /> : <p>{draft.body}</p>}</article>
           </div>
           <div className="tag-editor">
-            <div className="tag-editor-head"><Sparkles size={20} /><div><h2>AI 整理结果</h2><p>标签可增加 / 删除；「其他」后续会进入安全审核。</p></div></div>
-            {Object.entries(state.analysis.tags).filter(([layer]) => ["topic", "emotion", "meaning"].includes(layer)).map(([layer, tags]) => <div className="tag-layer" key={layer}><span>{({topic:"主题", emotion:"情绪", meaning:"意义"} as Record<string,string>)[layer]}</span><div>{tags.map(tag => <button key={tag}>{tag}<X size={13} /></button>)}<button className="add-tag">＋ 预设</button><button className="add-tag">＋ 其他</button></div></div>)}
+            <div className="tag-editor-head"><Sparkles size={20} /><div><h2>智能分析结果</h2><p>你可以根据自己的理解增加或删除标签，<br />也可以增加「其他」标签</p></div></div>
+            {(["topic", "emotion", "meaning"] as const).map(layer => {
+              const cappedTags = (tagDrafts[layer] ?? state.analysis!.tags[layer] ?? []).slice(0, 3);
+              const full = cappedTags.length >= 3;
+              return <div className="tag-layer" key={layer}><span>{({topic:"主题", emotion:"情绪", meaning:"意义"} as Record<string,string>)[layer]}</span><div>{cappedTags.map(tag => <button key={tag} onClick={() => removeTag(layer, tag)}>{tag}<X size={13} /></button>)}<button className="add-tag" disabled={full} onClick={() => addTag(layer)}>＋ 预设</button><button className="add-tag" disabled={full} onClick={() => addTag(layer, true)}>＋ 其他</button>{full && <small className="tag-limit">最多 3 个</small>}</div></div>;
+            })}
             <div className="comic-preview">
               <button className="comic-frame" title="点击后续可放大预览"><span>✦</span><b>你的专属故事画册</b><small>图片生成接口接入后会显示真实 AIGC 漫画</small></button>
               <button className="download-comic">下载保存</button>
@@ -814,7 +910,7 @@ function Wizard({ state, update, onPublished, onHome }: {
   );
 }
 
-function Resonance({ state, update, onBack, onContinue, onHome }: { state: AppState; update: AppUpdate; onBack: () => void; onContinue: () => void; onHome: () => void }) {
+function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThemeModeChange }: { state: AppState; update: AppUpdate; onBack: () => void; onContinue: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void }) {
   const t = copy[state.language];
   const dimensions = [
     { key: "city" as const, title: state.language === "zh" ? "城市" : "City", icon: "⌖", similar: state.language === "zh" ? "遇见来自相近城市语境的故事" : "Meet stories from a similar city context", different: state.language === "zh" ? "走进另一座城市的生活经验" : "Step into life in another city" },
@@ -823,8 +919,8 @@ function Resonance({ state, update, onBack, onContinue, onHome }: { state: AppSt
   ];
   const setMode = (key: keyof AppState["resonance"], mode: ResonanceMode) => update({ resonance: { ...state.resonance, [key]: mode } });
   return (
-    <main className="resonance-page">
-      <header className="topbar app-shell-header"><Logo onClick={onHome} /><div className="topbar-actions"><button className="button button-ghost mini" onClick={onBack}><ArrowLeft size={16} /> {t.backToTraits}</button><LanguageSelect language={state.language} onChange={language => update({ language })} /></div></header>
+    <main className={`resonance-page ${themeMode === "night" ? "theme-night" : ""}`}>
+      <header className="topbar app-shell-header"><Logo onClick={onHome} /><div className="topbar-actions"><button className="button button-ghost mini" onClick={onBack}><ArrowLeft size={16} /> {t.backToTraits}</button><ThemeToggle language={state.language} themeMode={themeMode} onChange={onThemeModeChange} /><LanguageSelect language={state.language} onChange={language => update({ language })} /></div></header>
       <section className="resonance-hero">
         <div><p className="eyebrow">{state.language === "zh" ? "你的故事已经成为一颗星星" : "Your story is now a star"}</p><h1>{t.resonanceTitle}</h1>{t.resonanceSub && <p>{t.resonanceSub}</p>}</div>
         <div className="new-star"><i /><span>你的星点</span><small>{state.draft.city || "未知城市"} · {state.draft.title || state.analysis?.suggestedTitle}</small></div>
@@ -885,7 +981,7 @@ function ReportDialog({ story, onClose }: { story: Story; onClose: () => void })
   </div></div>;
 }
 
-function Recommendations({ state, update, onEnterAtlas, onHome }: { state: AppState; update: (patch: Partial<AppState>) => void; onEnterAtlas: () => void; onHome: () => void }) {
+function Recommendations({ state, update, onEnterAtlas, onHome, themeMode, onThemeModeChange }: { state: AppState; update: (patch: Partial<AppState>) => void; onEnterAtlas: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void }) {
   const [detail, setDetail] = useState<Story | null>(null);
   const [report, setReport] = useState<Story | null>(null);
   const recommended = stories.slice(0, 5).map((s, i) => ({
@@ -907,8 +1003,8 @@ function Recommendations({ state, update, onEnterAtlas, onHome }: { state: AppSt
     if (reaction === "like") likedAt[id] = Date.now(); else delete likedAt[id];
     update({ reactions: { ...state.reactions, [id]: reaction }, likedAt });
   };
-  return <main className="recommend-page">
-    <header className="topbar app-shell-header"><Logo onClick={onHome} /><LanguageSelect language={state.language} onChange={language => update({ language })} /></header>
+  return <main className={`recommend-page ${themeMode === "night" ? "theme-night" : ""}`}>
+    <header className="topbar app-shell-header"><Logo onClick={onHome} /><div className="topbar-actions"><ThemeToggle language={state.language} themeMode={themeMode} onChange={onThemeModeChange} /><LanguageSelect language={state.language} onChange={language => update({ language })} /></div></header>
     <section className="recommend-heading"><div><p className="eyebrow">FIRST CONSTELLATION</p><h1>为你找到的<span className="serif">五则故事。</span></h1><p>至少打开一则，就可以进入完整轻量星图。你不需要读完固定数量。</p></div><PrimaryButton disabled={state.openedRecommendations.length < 1} onClick={onEnterAtlas}>进入故事星图</PrimaryButton></section>
     <section className="recommend-grid">
       {recommended.map((story, i) => <button className={`recommend-card card-${i}`} onClick={() => open(story)} key={story.id}>
@@ -969,7 +1065,7 @@ function Atlas({ state, update, onWrite, onHome }: { state: AppState; update: Ap
         <LanguageSelect language={state.language} onChange={language => update({ language })} />
       </header>
       <div className="atlas-title">
-        <div><p className="eyebrow">{nav === "liked" ? "YOUR RESONANCE" : nav === "mine" ? "YOUR STORIES" : nav === "resonance" ? "RESONANCE SETTINGS" : "STORY ATLAS"}</p><h1>{nav === "liked" ? (state.language === "zh" ? "曾与你产生共鸣的故事" : "Stories that resonated with you") : nav === "mine" ? (state.language === "zh" ? "你的故事星点" : "Your story stars") : nav === "resonance" ? (state.language === "zh" ? "调整故事相遇的方向" : "Adjust how stories find you") : t.atlasTitle}</h1></div>
+        <div><p className="eyebrow">{state.language === "zh" ? (nav === "liked" ? "你的共鸣" : nav === "mine" ? "你的故事" : nav === "resonance" ? "共鸣设置" : "故事星图") : (nav === "liked" ? "YOUR RESONANCE" : nav === "mine" ? "YOUR STORIES" : nav === "resonance" ? "RESONANCE SETTINGS" : "STORY ATLAS")}</p><h1>{nav === "liked" ? (state.language === "zh" ? "曾与你产生共鸣的故事" : "Stories that resonated with you") : nav === "mine" ? (state.language === "zh" ? "你的故事星点" : "Your story stars") : nav === "resonance" ? (state.language === "zh" ? "调整故事相遇的方向" : "Adjust how stories find you") : t.atlasTitle}</h1></div>
         <div className="atlas-stats"><div><b>{visible.length}</b><span>{t.visibleStories}</span></div><div><b>6</b><span>{t.themeGalaxies}</span></div></div>
       </div>
       {nav === "resonance" ? <div className="inline-resonance">
@@ -994,11 +1090,41 @@ function Atlas({ state, update, onWrite, onHome }: { state: AppState; update: Ap
 }
 
 export default function App() {
-  const [state, setState] = useState<AppState>(() => loadState());
+  const initialRoute = typeof window !== "undefined" ? routePatchFromPath() : {};
+  const [state, setState] = useState<AppState>(() => ({ ...loadState(), ...initialRoute }));
+  const [gatewaySection, setGatewaySection] = useState<"intro" | "preview" | "auth">(() => initialRoute.gatewaySection ?? "intro");
+  const [authMode, setAuthMode] = useState<"signup" | "login">(() => initialRoute.authMode ?? "signup");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("day");
+  const lastPathRef = useRef<string>(typeof window !== "undefined" ? normalizedPath() : "/");
+  const poppingRef = useRef(false);
   const update: AppUpdate = (patch) => setState(previous => ({ ...previous, ...(typeof patch === "function" ? patch(previous) : patch) }));
   useEffect(() => saveState(state), [state]);
+  useEffect(() => {
+    const onPop = () => {
+      const route = routePatchFromPath();
+      poppingRef.current = true;
+      if (route.gatewaySection) setGatewaySection(route.gatewaySection);
+      if (route.authMode) setAuthMode(route.authMode);
+      const { gatewaySection: _gatewaySection, authMode: _authMode, ...statePatch } = route;
+      update(statePatch);
+      lastPathRef.current = normalizedPath();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  useEffect(() => {
+    const path = pathFromState(state, gatewaySection, authMode);
+    if (path === lastPathRef.current) {
+      poppingRef.current = false;
+      return;
+    }
+    const method = poppingRef.current ? "replaceState" : "pushState";
+    window.history[method]({}, "", externalPath(path));
+    lastPathRef.current = path;
+    poppingRef.current = false;
+  }, [state.screen, state.wizardStep, gatewaySection, authMode]);
   const go = (screen: string) => update({ screen });
-  const goHome = () => update({ screen: "intro", onboarded: false });
+  const goHome = () => { setGatewaySection("intro"); update({ screen: "intro", onboarded: false }); };
   const startNewStory = () => update(previous => {
     const shouldArchive = previous.draft.body.trim() || previous.draft.title.trim();
     return {
@@ -1015,12 +1141,32 @@ export default function App() {
 
   let content: React.ReactNode;
   if (["intro", "icebreaker", "preview", "auth"].includes(state.screen)) {
-    content = <PrototypeGateway language={state.language} onLanguageChange={language => update({ language })} onHome={goHome} onComplete={() => update({ onboarded: true, accountCreated: true, screen: state.firstStoryComplete ? "atlas" : "wizard" })} />;
+    content = <PrototypeGateway
+      language={state.language}
+      onLanguageChange={language => update({ language })}
+      onHome={goHome}
+      onComplete={() => update({ onboarded: true, accountCreated: true, screen: state.firstStoryComplete ? "atlas" : "wizard" })}
+      section={gatewaySection}
+      authMode={authMode}
+      onAuthModeChange={setAuthMode}
+      onSectionChange={setGatewaySection}
+      themeMode={themeMode}
+      onThemeModeChange={setThemeMode}
+    />;
   }
-  else if (state.screen === "wizard") content = <Wizard state={state} update={update} onPublished={publishStory} onHome={goHome} />;
-  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => go("atlas")} onHome={goHome} />;
-  else if (state.screen === "recommendations") content = <Recommendations state={state} update={update} onEnterAtlas={() => go("atlas")} onHome={goHome} />;
-  else content = <Atlas state={state} update={update} onWrite={startNewStory} onHome={goHome} />;
+  else if (state.screen === "wizard") content = <Wizard state={state} update={update} onPublished={publishStory} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
+  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => go("atlas")} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
+  else if (state.screen === "recommendations") content = <Recommendations state={state} update={update} onEnterAtlas={() => go("atlas")} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
+  else content = <StoryGalaxy
+    language={state.language}
+    themeMode={themeMode}
+    onLanguageChange={language => update({ language })}
+    onThemeModeChange={setThemeMode}
+    onWrite={startNewStory}
+    onHome={goHome}
+    resonance={state.resonance}
+    onResonanceChange={resonance => update({ resonance })}
+  />;
 
   return <>{content}</>;
 }
