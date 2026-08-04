@@ -1,0 +1,16 @@
+FROM node:20-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.server.json ./
+COPY server ./server
+RUN npm run build:image-api
+
+FROM node:20-bookworm-slim AS runtime
+ENV NODE_ENV=production
+ENV PORT=3000
+WORKDIR /app
+COPY --from=build /app/server/dist ./server/dist
+USER node
+EXPOSE 3000
+CMD ["node", "server/dist/index.js"]
