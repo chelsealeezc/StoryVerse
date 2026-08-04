@@ -93,6 +93,8 @@ DASHSCOPE_QWEN_MODEL=qwen-plus
 
 > GitHub Pages 是静态托管，不能安全保存 API Key。公开环境需要把 `/api/generate-image` 部署为独立的服务端接口，再通过 `VITE_IMAGE_API_URL` 指向该地址。
 
+生产图片接口可通过 `Dockerfile.api` 构建，容器监听 `3000` 端口，健康检查为 `/health/live`。服务端必须配置 `DASHSCOPE_API_KEY`、`DASHSCOPE_WORKSPACE_ID` 和 `FRONTEND_ORIGINS=https://chelsealeezc.github.io`；前端构建时设置 `VITE_IMAGE_API_URL=https://<你的API域名>/api/generate-image`。
+
 默认本地开发地址通常为：
 
 [http://127.0.0.1:4173/](http://127.0.0.1:4173/)

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && cp dist/index.html dist/404.html",
+    "build:image-api": "tsc -p tsconfig.server.json",
+    "start:image-api": "node server/dist/index.js",
     "preview": "vite preview",
     "test": "vitest run"
   },
