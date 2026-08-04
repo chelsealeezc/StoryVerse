@@ -2,7 +2,6 @@ import { createServer } from "node:http";
 import { createImageGenerationHandler } from "./image-generation.js";
 
 const port = Number.parseInt(process.env.PORT || "3000", 10);
-const acmeAccountThumbprint = process.env.ACME_ACCOUNT_THUMBPRINT?.trim();
 const allowedOrigins = new Set(
   (process.env.FRONTEND_ORIGINS || "https://chelsealeezc.github.io,http://127.0.0.1:4173")
     .split(",")
@@ -40,14 +39,6 @@ const server = createServer(async (request, response) => {
   }
 
   const pathname = new URL(request.url || "/", "http://localhost").pathname;
-  if (request.method === "GET" && acmeAccountThumbprint && pathname.startsWith("/.well-known/acme-challenge/")) {
-    const token = pathname.slice("/.well-known/acme-challenge/".length);
-    if (/^[A-Za-z0-9_-]+$/.test(token)) {
-      response.setHeader("Content-Type", "text/plain; charset=utf-8");
-      response.end(`${token}.${acmeAccountThumbprint}`);
-      return;
-    }
-  }
   if (
     pathname === "/health/live" ||
     pathname === "/health/ready" ||

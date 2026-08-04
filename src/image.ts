@@ -24,7 +24,9 @@ type ComicResponse = {
 };
 
 export async function generateStoryComic(draft: Draft, analysis: Analysis, editedTags?: string[]) {
-  const endpoint = import.meta.env.VITE_IMAGE_API_URL || "/api/generate-image";
+  const endpoint = import.meta.env.VITE_IMAGE_API_URL || (import.meta.env.PROD
+    ? "https://dcc1fc237cf0411084a6990a6cf00cfd-cn-hangzhou.alicloudapi.com/api/generate-image"
+    : "/api/generate-image");
   const tags = editedTags?.length ? editedTags : Object.values(analysis.tags).flat();
   const response = await fetch(endpoint, {
     method: "POST",
