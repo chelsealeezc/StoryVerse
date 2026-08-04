@@ -39,7 +39,12 @@ const server = createServer(async (request, response) => {
   }
 
   const pathname = new URL(request.url || "/", "http://localhost").pathname;
-  if (pathname === "/health/live" || pathname === "/health/ready") {
+  if (
+    pathname === "/health/live" ||
+    pathname === "/health/ready" ||
+    pathname === "/api/v1/health/live" ||
+    pathname === "/api/v1/health/ready"
+  ) {
     response.setHeader("Content-Type", "application/json; charset=utf-8");
     response.end(JSON.stringify({ status: "ok" }));
     return;
