@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, Check, ChevronRight, CircleUserRound,
-  Compass, Eye, Feather, Flag, Heart, Layers3, LogOut, MapPin, Menu, Mic,
-  Orbit, Search, SlidersHorizontal, Sparkles, ThumbsDown, X,
+  Compass, Download, Eye, Feather, Flag, Heart, Layers3, LoaderCircle, LogOut, MapPin, Menu, Mic,
+  Orbit, RefreshCw, Search, SlidersHorizontal, Sparkles, ThumbsDown, X,
 } from "lucide-react";
 import { extractHints } from "./ai";
 import { guides, icebreakers, mockAnalysis, stories } from "./data";
+import { downloadFourPanelComic, generateStoryComic, type ComicStoryboard } from "./image";
 import { formatCoords, geocodePlace, searchPlaces } from "./places";
 import { initialState, loadState, saveState } from "./storage";
 import { Auragate as PrototypeGateway } from "./PrototypeGateway";
@@ -636,10 +637,28 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const [editingBody, setEditingBody] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [tagDrafts, setTagDrafts] = useState<Record<string, string[]>>({});
+  const [storyImages, setStoryImages] = useState<string[]>([]);
+  const [comicStoryboard, setComicStoryboard] = useState<ComicStoryboard | null>(null);
+  const [imageStatus, setImageStatus] = useState<"idle" | "generating" | "ready" | "failed">("idle");
+  const [imageError, setImageError] = useState("");
   const hints = useMemo(() => extractHints(draft.body), [draft.body]);
   const mounted = useRef(false);
 
   const setDraft = (patch: Partial<Draft>) => update(previous => ({ draft: { ...previous.draft, ...patch } }));
+  const runImageGeneration = async () => {
+    if (!state.analysis) return;
+    setImageStatus("generating");
+    setImageError("");
+    try {
+      const result = await generateStoryComic(draft, state.analysis, Object.values(tagDrafts).flat());
+      setStoryImages(result.imageUrls);
+      setComicStoryboard(result.storyboard);
+      setImageStatus("ready");
+    } catch (error) {
+      setImageStatus("failed");
+      setImageError(error instanceof Error ? error.message : "图片生成失败，请稍后重试。");
+    }
+  };
   useEffect(() => {
     const timer = window.setInterval(() => {
       update(previous => ({ draft: { ...previous.draft, saves: previous.draft.saves + 1, savedAt: Date.now() } }));
@@ -896,8 +915,20 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
               return <div className="tag-layer" key={layer}><span>{({topic:"主题", emotion:"情绪", meaning:"意义"} as Record<string,string>)[layer]}</span><div>{cappedTags.map(tag => <button key={tag} onClick={() => removeTag(layer, tag)}>{tag}<X size={13} /></button>)}<button className="add-tag" disabled={full} onClick={() => addTag(layer)}>＋ 预设</button><button className="add-tag" disabled={full} onClick={() => addTag(layer, true)}>＋ 其他</button>{full && <small className="tag-limit">最多 3 个</small>}</div></div>;
             })}
             <div className="comic-preview">
-              <button className="comic-frame" title="点击后续可放大预览"><span>✦</span><b>你的专属故事画册</b><small>图片生成接口接入后会显示真实 AIGC 漫画</small></button>
-              <button className="download-comic">下载保存</button>
+              <div className={`comic-frame ${storyImages.length === 4 ? "generated comic-grid" : ""}`}>
+                {storyImages.length === 4 ? (
+                  storyImages.map((image, index) => <figure className="comic-panel" key={index}><img src={image} alt={`《${draft.title || state.analysis!.suggestedTitle}》第 ${index + 1} 格`} /></figure>)
+                ) : imageStatus === "generating" ? (
+                  <div className="comic-state"><LoaderCircle className="comic-spinner" size={38} /><b>正在创作四格漫画…</b><small>千问正在拆解分镜，万相随后绘制四张连续画面，可能需要一两分钟</small></div>
+                ) : imageStatus === "failed" ? (
+                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>这次没有完成四格</b><small>{imageError}</small><button className="retry-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成四格</button></div>
+                ) : (
+                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>把故事变成四格漫画</b><small>将生成起因、发展、转折和结局四张连续画面</small><button className="retry-comic" onClick={() => void runImageGeneration()}>生成四格漫画</button></div>
+                )}
+              </div>
+              {storyImages.length === 4 && <div className="comic-actions"><button className="download-comic" onClick={() => void downloadFourPanelComic(storyImages, draft.title || state.analysis!.suggestedTitle)}><Download size={16} />合成并下载四格 PNG</button><button className="regenerate-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成</button></div>}
+              {comicStoryboard && <details className="comic-storyboard"><summary>查看四格分镜</summary><ol>{comicStoryboard.panels.map(panel => <li key={panel.order}><b>{panel.order}. {panel.purpose}</b><span>{panel.scene} · {panel.action}</span></li>)}</ol></details>}
+              <p className="comic-privacy">生成时会将故事正文发送给阿里云百炼；每次生成四张图片并按四张计费。图片只保留在当前页面，刷新后消失。</p>
             </div>
             <div className="publish-note"><Check size={17} />确认后将进入模拟安全检查，并匿名加入故事池。</div>
             <PrimaryButton onClick={onPublished}>{t.publish}</PrimaryButton>
