@@ -72,6 +72,29 @@ npm install
 npm run dev
 ```
 
+### AI 故事生图
+
+故事确认页已接入阿里云百炼通义万相。复制环境变量模板并填入自己的百炼 API Key：
+
+```bash
+cp .env.example .env.local
+```
+
+编辑 `.env.local`：
+
+```dotenv
+DASHSCOPE_API_KEY=你的百炼_API_Key
+DASHSCOPE_WORKSPACE_ID=你的百炼_Workspace_ID
+DASHSCOPE_IMAGE_MODEL=wan2.7-image
+DASHSCOPE_QWEN_MODEL=qwen-plus
+```
+
+随后运行 `npm run dev`。密钥只由本机 Vite 服务端读取，不会进入浏览器代码；千问先生成结构化四格分镜，万相 2.7 再生成四张连续画面。页面以 2×2 排列并可合成为一张 PNG 下载，图片不会上传长期存储。
+
+> GitHub Pages 是静态托管，不能安全保存 API Key。公开环境需要把 `/api/generate-image` 部署为独立的服务端接口，再通过 `VITE_IMAGE_API_URL` 指向该地址。
+
+生产图片接口可通过 `Dockerfile.api` 构建，容器监听 `3000` 端口，健康检查为 `/health/live`。服务端必须配置 `DASHSCOPE_API_KEY`、`DASHSCOPE_WORKSPACE_ID` 和 `FRONTEND_ORIGINS=https://chelsealeezc.github.io`；前端构建时设置 `VITE_IMAGE_API_URL=https://<你的API域名>/api/generate-image`。
+
 默认本地开发地址通常为：
 
 [http://127.0.0.1:4173/](http://127.0.0.1:4173/)
@@ -107,4 +130,3 @@ npm run build
 部署完成后访问：
 
 [https://chelsealeezc.github.io/StoryVerse/](https://chelsealeezc.github.io/StoryVerse/)
-
