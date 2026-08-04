@@ -77,9 +77,9 @@
 
 .storyverse-root[data-theme="day"]::after {
   background:
-    linear-gradient(rgba(28,24,21,0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(69,50,36,0.06) 1px, transparent 1px);
-  opacity: 0.78;
+    linear-gradient(rgba(28,24,21,0.11) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(69,50,36,0.095) 1px, transparent 1px);
+  opacity: 0.9;
 }
 
 .meteor {
@@ -722,6 +722,13 @@
   background: rgba(255,255,255,0.18);
 }
 
+/*
+ * 注意 width: max-content —— 少了它，这个条子的宽度会被算成「视口的一半」。
+ * 因为 position: fixed + left: 50% 时，收缩到合适宽度(shrink-to-fit)的可用宽度
+ * 是从左边 50% 量到视口右缘，也就是 50vw；后面的 translate(-50%) 只是视觉居中，
+ * 不会把这个宽度还回来。内容需要约 693px，却只分到 640px，于是每个中文标签
+ * 被逐字折行成「城 / 市」「相 / 近」。这和屏幕宽窄无关，任何尺寸下都会发生。
+ */
 .resonance-bar {
   position: fixed;
   z-index: 29;
@@ -729,6 +736,11 @@
   top: 50%;
   transform: translate(-50%, -50%);
   display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: min(calc(100vw - 32px), 1120px);
   gap: 12px;
   padding: 12px 14px;
   border: 1px solid rgba(255,255,255,0.16);
@@ -738,9 +750,17 @@
   -webkit-backdrop-filter: blur(22px);
 }
 
+/* 放不下就整组换行（而不是把词拆开）；换行后胶囊圆角改成圆角矩形才不别扭。 */
+@media (max-width: 760px) {
+  .resonance-bar {
+    border-radius: 26px;
+  }
+}
+
 .resonance-bar div {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 8px;
 }
 
@@ -748,10 +768,13 @@
   color: rgba(255,255,255,0.52);
   font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .resonance-bar button {
   height: 38px;
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 0 18px;
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 999px;

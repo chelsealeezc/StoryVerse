@@ -162,11 +162,12 @@ function StarField({ zoom, themeMode }: { zoom: number; themeMode: ThemeMode }) 
   const isDay = themeMode === "day";
   return (
     <>
+      {/* 白天的星点同样偏淡，稍微放大并提高不透明度；夜间数值不动。 */}
       <Points positions={base} stride={3} frustumCulled>
-        <PointMaterial transparent color={isDay ? "#1f1a16" : "#ffffff"} size={0.012} sizeAttenuation depthWrite={false} opacity={isDay ? 0.26 : 0.38} />
+        <PointMaterial transparent color={isDay ? "#1f1a16" : "#ffffff"} size={isDay ? 0.016 : 0.012} sizeAttenuation depthWrite={false} opacity={isDay ? 0.42 : 0.38} />
       </Points>
       <Points positions={dense} stride={3} frustumCulled>
-        <PointMaterial transparent color={isDay ? "#3b2b22" : "#ffacd8"} size={0.007 + zoom * 0.012} sizeAttenuation depthWrite={false} opacity={(isDay ? 0.16 : 0.16) + zoom * 0.18} />
+        <PointMaterial transparent color={isDay ? "#3b2b22" : "#ffacd8"} size={(isDay ? 0.009 : 0.007) + zoom * 0.012} sizeAttenuation depthWrite={false} opacity={(isDay ? 0.26 : 0.16) + zoom * 0.18} />
       </Points>
     </>
   );
@@ -175,8 +176,17 @@ function StarField({ zoom, themeMode }: { zoom: number; themeMode: ThemeMode }) 
 function OrbitalAtlas({ zoom, themeMode }: { zoom: number; themeMode: ThemeMode }) {
   const rings = useMemo(() => Array.from({ length: 22 }, (_, i) => 1.25 + i * 0.46), []);
   const spokes = useMemo(() => Array.from({ length: 20 }, (_, i) => (i / 20) * Math.PI * 2), []);
-  const lineColor = themeMode === "day" ? "#241b14" : "#ffffff";
-  const lineBoost = themeMode === "day" ? 0.13 : 0;
+  const isDay = themeMode === "day";
+  const lineColor = isDay ? "#241b14" : "#ffffff";
+  const lineBoost = isDay ? 0.26 : 0;
+  /**
+   * 白天主题下线条几乎看不见，是两个原因叠加的：
+   * 1) lineWidth 只有 0.25–0.6，而 drei 的 <Line> 以「像素」为单位，不足 1px 的线
+   *    会被光栅化成半透明，等于又打了一次折扣；
+   * 2) 深色线画在米白背景上，本身对比度就不如夜间的白线画在纯黑上。
+   * 所以白天单独加粗到 1px 以上并提高不透明度；夜间保持原值不变。
+   */
+  const widthScale = isDay ? 2.8 : 1;
   return (
     <group rotation-x={-Math.PI / 2}>
       {rings.map((r, index) => {
@@ -191,7 +201,7 @@ function OrbitalAtlas({ zoom, themeMode }: { zoom: number; themeMode: ThemeMode 
             color={lineColor}
             transparent
             opacity={(index % 3 === 0 ? 0.1 : 0.052) + zoom * 0.035 + lineBoost}
-            lineWidth={index % 5 === 0 ? 0.6 : 0.35}
+            lineWidth={(index % 5 === 0 ? 0.6 : 0.35) * widthScale}
             dashed={index % 4 === 0}
             dashSize={0.08}
             gapSize={0.12}
@@ -199,7 +209,7 @@ function OrbitalAtlas({ zoom, themeMode }: { zoom: number; themeMode: ThemeMode 
         );
       })}
       {spokes.map((a) => (
-        <Line key={a} points={[new THREE.Vector3(Math.cos(a) * 0.8, Math.sin(a) * 0.5, 0), new THREE.Vector3(Math.cos(a) * 12, Math.sin(a) * 7.4, 0)]} color={lineColor} transparent opacity={0.055 + zoom * 0.025 + lineBoost} lineWidth={0.25} />
+        <Line key={a} points={[new THREE.Vector3(Math.cos(a) * 0.8, Math.sin(a) * 0.5, 0), new THREE.Vector3(Math.cos(a) * 12, Math.sin(a) * 7.4, 0)]} color={lineColor} transparent opacity={0.055 + zoom * 0.025 + lineBoost} lineWidth={0.25 * widthScale} />
       ))}
     </group>
   );
