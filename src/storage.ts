@@ -17,6 +17,8 @@ export const initialState: AppState = {
   draft: emptyDraft,
   draftBox: [],
   analysis: null,
+  // 首次访问：localStorage 里没有记录，enabled 保持 true，引导就会自动播放
+  tour: { enabled: true, seen: [] },
 };
 
 export function loadState(): AppState {
@@ -29,6 +31,7 @@ export function loadState(): AppState {
       draft: { ...emptyDraft, ...parsed.draft },
       draftBox: parsed.draftBox ?? [],
       language: parsed.language ?? "zh",
+      tour: { ...initialState.tour, ...(parsed.tour ?? {}) },
     } : initialState;
   } catch {
     return initialState;

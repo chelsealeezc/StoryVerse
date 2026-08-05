@@ -4,6 +4,7 @@ import { Line, OrbitControls, Points, PointMaterial } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import gsap from "gsap";
 import * as THREE from "three";
+import { Tour } from "./Tour";
 import "./story-galaxy.css";
 
 type IconName = "compass" | "book" | "tune" | "heart" | "thumbsDown" | "flag" | "plus" | "search" | "x" | "user" | "logout" | "sun" | "moon";
@@ -525,7 +526,7 @@ function FloatingMenu({ activeView, language, onChange }: { activeView: ViewMode
   return (
     <nav aria-label="StoryVerse star map navigation" className="floating-nav">
       {navItems.map((item) => (
-        <button key={item.id} className={`neon-control dock-item ${activeView === item.id ? "is-active" : ""}`} onClick={() => onChange(item.id)}>
+        <button key={item.id} data-tour={`nav-${item.id}`} className={`neon-control dock-item ${activeView === item.id ? "is-active" : ""}`} onClick={() => onChange(item.id)}>
           <span className="nav-icon"><Icon name={item.icon} /></span>
           <span className="nav-label">{language === "zh" ? item.zh : item.en}</span>
         </button>
@@ -658,6 +659,9 @@ export function StoryGalaxy({
   onLogout,
   resonance = defaultResonance,
   onResonanceChange,
+  showTour = false,
+  onTourFinish,
+  onTourSkip,
 }: {
   language: "zh" | "en";
   themeMode: ThemeMode;
@@ -668,6 +672,9 @@ export function StoryGalaxy({
   onLogout?: () => void;
   resonance?: ResonanceSelection;
   onResonanceChange?: (resonance: ResonanceSelection) => void;
+  showTour?: boolean;
+  onTourFinish?: () => void;
+  onTourSkip?: () => void;
 }) {
   const [activeView, setActiveView] = useState<ViewMode>("explore");
   const [selected, setSelected] = useState<StoryNodeData | null>(null);
@@ -710,7 +717,7 @@ export function StoryGalaxy({
       <div className="meteor meteor-three" />
       <header className="top-overlay">
         <button className="brand brand-button" onClick={onHome} aria-label={language === "zh" ? "回到首页" : "Back home"}><span>Story</span>Verse</button>
-        <div className="header-actions">
+        <div className="header-actions" data-tour="top-controls">
           <button className="neon-control theme-button" aria-label={t.theme} onClick={() => onThemeModeChange(themeMode === "night" ? "day" : "night")}>
             <Icon name={themeMode === "night" ? "sun" : "moon"} size={20} />
           </button>
@@ -727,6 +734,15 @@ export function StoryGalaxy({
       {activeView === "resonance" && <ResonanceBar language={language} value={draftResonance} onChange={setDraftResonance} onConfirm={confirmResonance} />}
       <AccountDock language={language} onLogout={onLogout ?? onHome} />
       <FloatingMenu activeView={activeView} language={language} onChange={handleViewChange} />
+      {/* 大厅引导最后一步的按钮直接把用户送进写作流程，衔接更顺 */}
+      {showTour && (
+        <Tour
+          scene="lobby"
+          language={language}
+          onFinish={() => { onTourFinish?.(); onWrite(); }}
+          onSkip={() => onTourSkip?.()}
+        />
+      )}
     </main>
   );
 }

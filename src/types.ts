@@ -75,4 +75,9 @@ export interface AppState {
   draft: Draft;
   draftBox: SavedDraft[];
   analysis: Analysis | null;
+  /**
+   * 新手引导。enabled 为 true 表示还在引导流程里（首次访问的默认值）；
+   * seen 记录已经播放完的场景，避免退回上一步时重复弹出。
+   */
+  tour: { enabled: boolean; seen: string[] };
 }

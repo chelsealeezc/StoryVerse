@@ -14,8 +14,18 @@ import { formatCoords, geocodePlace, searchPlaces } from "./places";
 import { initialState, loadState, saveState } from "./storage";
 import { Auragate as PrototypeGateway } from "./PrototypeGateway";
 import { StoryGalaxy } from "./StoryGalaxy";
+import { Tour } from "./Tour";
 import type { PlaceSuggestion } from "./places";
+import type { TourSceneId } from "./tour-steps";
 import type { AppState, Draft, Language, Reaction, ResonanceMode, Story } from "./types";
+import "./tour.css";
+
+/** 引导相关的三个回调在 Wizard / Resonance 之间是同一组，抽出来少写几遍 */
+interface TourProps {
+  tourActive: (scene: TourSceneId) => boolean;
+  onTourFinish: (scene: TourSceneId) => void;
+  onTourSkip: () => void;
+}
 
 type ThemeMode = "day" | "night";
 
@@ -634,13 +644,20 @@ function CityField({ draft, setDraft, label }: { draft: Draft; setDraft: (patch:
   );
 }
 
-function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChange }: {
+function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChange, tourActive, onTourFinish, onTourSkip }: {
   state: AppState; update: AppUpdate; onPublished: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void;
-}) {
+} & TourProps) {
   const step = state.wizardStep;
   const draft = state.draft;
   const language = state.language;
   const t = copy[language];
+  /* 步骤 → 引导场景。第 2 步是 AI 整理的等待页，按需求不做引导。 */
+  const sceneForStep: Record<number, TourSceneId | undefined> = { 0: "guide", 1: "collection", 3: "confirm" };
+  const candidateScene = sceneForStep[step];
+  // 第 4 步要等 analysis 出来、内容真正渲染了才有目标可高亮
+  const wizardTourScene = candidateScene && tourActive(candidateScene) && (step !== 3 || !!state.analysis)
+    ? candidateScene
+    : null;
   const [analysisStage, setAnalysisStage] = useState(0);
   const [focusMode, setFocusMode] = useState(false);
   const [idlePromptIndex, setIdlePromptIndex] = useState(0);
@@ -979,11 +996,20 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
       )}
       {pasteDialog && <div className="modal-backdrop"><div className="report-dialog"><h2>{t.pasteTitle}</h2><div className="dialog-actions"><button className="button button-ghost" onClick={() => setPasteDialog(false)}>{t.pasteYes}</button><button className="button button-primary" onClick={() => setPasteDialog(false)}>{t.pasteOther}</button></div></div></div>}
       {leaveTarget !== null && <div className="modal-backdrop"><div className="report-dialog"><h2>{t.leaveTitle}</h2><div className="dialog-actions three"><button className="button button-ghost" onClick={() => setLeaveTarget(null)}>{t.keepWriting}</button><button className="button button-ghost" onClick={() => confirmLeave(false)}>{t.leaveAnyway}</button><button className="button button-primary" onClick={() => confirmLeave(true)}>{t.saveDraft}</button></div></div></div>}
+      {/* 第 3 步（AI 整理）按需求不做引导，所以这里只有 0 / 1 / 3 三个场景 */}
+      {wizardTourScene && !pasteDialog && leaveTarget === null && (
+        <Tour
+          scene={wizardTourScene}
+          language={state.language}
+          onFinish={onTourFinish}
+          onSkip={onTourSkip}
+        />
+      )}
     </main>
   );
 }
 
-function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThemeModeChange }: { state: AppState; update: AppUpdate; onBack: () => void; onContinue: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void }) {
+function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThemeModeChange, tourActive, onTourFinish, onTourSkip }: { state: AppState; update: AppUpdate; onBack: () => void; onContinue: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void } & TourProps) {
   const t = copy[state.language];
   const dimensions = [
     { key: "city" as const, title: state.language === "zh" ? "城市" : "City", icon: "⌖", similar: state.language === "zh" ? "遇见来自相近城市语境的故事" : "Meet stories from a similar city context", different: state.language === "zh" ? "走进另一座城市的生活经验" : "Step into life in another city" },
@@ -1008,6 +1034,10 @@ function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThe
         </article>)}
       </section>
       <div className="resonance-action"><PrimaryButton onClick={onContinue}>{t.findStories}</PrimaryButton><small>{state.language === "zh" ? "随时可以在主页修改" : "You can adjust this anytime on the home page."}</small></div>
+      {/* 引导的最后一站：走完这里整条引导就结束（见 App 里的 finishTour） */}
+      {tourActive("resonance") && (
+        <Tour scene="resonance" language={state.language} onFinish={onTourFinish} onSkip={onTourSkip} />
+      )}
     </main>
   );
 }
@@ -1212,6 +1242,21 @@ export default function App() {
   });
   const publishStory = () => update({ firstStoryComplete: true, screen: "resonance" });
 
+  /*
+   * 新手引导的调度。每个场景只在「引导还开着」且「这个场景没播过」时出现，
+   * 所以用户往回退一步不会被同一段引导再拦一次。
+   * 跳过 = 整条引导关掉；共鸣页是最后一站，走完就关。
+   */
+  const tourSeen = (scene: TourSceneId) => state.tour.seen.includes(scene);
+  const tourActive = (scene: TourSceneId) => state.tour.enabled && !tourSeen(scene);
+  const finishTour = (scene: TourSceneId) => update(previous => ({
+    tour: {
+      enabled: scene === "resonance" ? false : previous.tour.enabled,
+      seen: previous.tour.seen.includes(scene) ? previous.tour.seen : [...previous.tour.seen, scene],
+    },
+  }));
+  const skipTour = () => update({ tour: { enabled: false, seen: state.tour.seen } });
+
   let content: React.ReactNode;
   if (["intro", "icebreaker", "preview", "auth"].includes(state.screen)) {
     content = <PrototypeGateway
@@ -1227,8 +1272,8 @@ export default function App() {
       onThemeModeChange={setThemeMode}
     />;
   }
-  else if (state.screen === "wizard") content = <Wizard state={state} update={update} onPublished={publishStory} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
-  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => go("atlas")} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
+  else if (state.screen === "wizard") content = <Wizard state={state} update={update} onPublished={publishStory} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
+  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => go("atlas")} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
   else if (state.screen === "recommendations") content = <Recommendations state={state} update={update} onEnterAtlas={() => go("atlas")} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
   else content = <StoryGalaxy
     language={state.language}
@@ -1240,6 +1285,9 @@ export default function App() {
     onLogout={goHome}
     resonance={state.resonance}
     onResonanceChange={resonance => update({ resonance })}
+    showTour={tourActive("lobby")}
+    onTourFinish={() => finishTour("lobby")}
+    onTourSkip={skipTour}
   />;
 
   return <>{content}</>;

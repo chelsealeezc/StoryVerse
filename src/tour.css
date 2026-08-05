@@ -1,0 +1,150 @@
+/* 新手引导浮层。刻意用一张深色卡片，浅色/深色主题下都读得清。 */
+
+.tour-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  animation: tour-fade .28s ease;
+}
+
+@keyframes tour-fade { from { opacity: 0 } }
+
+/* 没有高亮目标时的整屏压暗 */
+.tour-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 10, 16, .62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/*
+ * 高亮：盒子本身透明，靠一圈超大的 box-shadow 把周围压暗，
+ * 等于在遮罩上挖了个圆角洞，不需要 SVG mask。
+ */
+.tour-spotlight {
+  position: absolute;
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 9999px rgba(6, 10, 16, .62),
+    0 0 0 2px rgba(149, 233, 255, .85),
+    0 0 26px 4px rgba(149, 233, 255, .35);
+  transition: top .32s cubic-bezier(.4, 0, .2, 1), left .32s cubic-bezier(.4, 0, .2, 1),
+              width .32s cubic-bezier(.4, 0, .2, 1), height .32s cubic-bezier(.4, 0, .2, 1);
+  pointer-events: none;
+}
+
+.tour-card {
+  position: absolute;
+  width: 340px;
+  max-width: calc(100vw - 28px);
+  padding: 20px 22px 18px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 20px;
+  background: #14181d;
+  color: #f2f6fa;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .5);
+  transition: top .3s cubic-bezier(.4, 0, .2, 1), left .3s cubic-bezier(.4, 0, .2, 1);
+}
+
+.tour-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.tour-count {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #95e9ff;
+}
+
+.tour-skip {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(242, 246, 250, .5);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color .18s ease;
+}
+
+.tour-skip:hover { color: rgba(242, 246, 250, .9); }
+
+.tour-card h3 {
+  margin: 0 0 10px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1.35;
+}
+
+.tour-card p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: rgba(233, 240, 247, .82);
+  white-space: normal;
+}
+
+.tour-dots {
+  display: flex;
+  gap: 5px;
+  margin: 14px 0 14px;
+}
+
+.tour-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .2);
+  transition: background .2s ease, width .2s ease;
+}
+
+.tour-dots i.past { background: rgba(149, 233, 255, .45); }
+.tour-dots i.on { width: 16px; border-radius: 3px; background: #95e9ff; }
+
+.tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tour-back,
+.tour-next {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform .16s ease, background .18s ease, border-color .18s ease;
+}
+
+.tour-back {
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: transparent;
+  color: rgba(242, 246, 250, .8);
+}
+
+.tour-back:hover { border-color: rgba(255, 255, 255, .38); color: #fff; }
+
+.tour-next {
+  border: 1px solid #95e9ff;
+  background: #95e9ff;
+  color: #06202f;
+}
+
+.tour-next:hover { transform: translateY(-1px); background: #b2f0ff; border-color: #b2f0ff; }
+
+@media (max-width: 680px) {
+  .tour-card { width: calc(100vw - 28px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-layer { animation: none }
+  .tour-spotlight, .tour-card { transition: none }
+}
