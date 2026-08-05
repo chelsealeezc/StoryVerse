@@ -6,7 +6,7 @@ import gsap from "gsap";
 import * as THREE from "three";
 import "./story-galaxy.css";
 
-type IconName = "compass" | "book" | "tune" | "heart" | "plus" | "search" | "x" | "user" | "logout" | "sun" | "moon";
+type IconName = "compass" | "book" | "tune" | "heart" | "thumbsDown" | "flag" | "plus" | "search" | "x" | "user" | "logout" | "sun" | "moon";
 type ViewMode = "explore" | "mine" | "resonance" | "liked" | "write";
 type StoryTheme = "city" | "choice" | "family" | "future" | "memory";
 type ThemeMode = "night" | "day";
@@ -52,6 +52,30 @@ const galaxyCopy = {
     legend: "每个星点是一段故事：大小来自文本长度，颜色来自主题，距离来自与你的相似度。",
     account: "个人账户",
     logout: "退出",
+    profileTitle: "个人中心",
+    profileLead: "管理你在 StoryVerse 中被看见的方式。后端接入后，这些更改会同步到账户数据库。",
+    nickname: "修改昵称",
+    password: "修改密码",
+    email: "修改绑定邮箱",
+    feedback: "用户反馈",
+    feedbackPlaceholder: "告诉我们你遇到的问题、想要的功能，或任何真实感受……",
+    saveProfile: "保存修改",
+    profileSaved: "已保存到前端接口位，后端接入后会写入数据库。",
+    like: "喜欢",
+    dislike: "不喜欢",
+    report: "举报",
+    reportTitle: "举报这段故事",
+    reportLead: "请选择最符合的原因。举报说明仅供审核人员查看。",
+    reportReasons: ["隐私泄露", "仇恨或骚扰", "危险内容", "垃圾内容", "其他"],
+    reportNote: "补充说明（选填）",
+    reportPlaceholder: "请提供有助于审核的上下文……",
+    reportContinue: "检查并继续",
+    reportConfirmTitle: "确认提交这次举报？",
+    reportSubmit: "确认提交举报",
+    reportBack: "返回修改",
+    reportDoneTitle: "举报已受理",
+    reportDoneBody: "谢谢你帮助守护故事社区。审核前不会向故事作者公开你的身份。",
+    backToStory: "返回故事",
     resonanceGroups: [["城市", "相近", "不同"], ["人生阶段", "相近", "不同"], ["主题", "相近", "不同"]],
     confirm: "确认",
   },
@@ -68,6 +92,30 @@ const galaxyCopy = {
     legend: "Each star is a story: size comes from length, color from theme, distance from similarity to you.",
     account: "Account",
     logout: "Log out",
+    profileTitle: "Account center",
+    profileLead: "Manage how you appear inside StoryVerse. Once backend is connected, these updates will sync to the account database.",
+    nickname: "Nickname",
+    password: "Password",
+    email: "Bound email",
+    feedback: "Feedback",
+    feedbackPlaceholder: "Tell us what happened, what you need, or what felt off…",
+    saveProfile: "Save changes",
+    profileSaved: "Saved to the frontend interface stub. Backend can later persist this to the database.",
+    like: "Like",
+    dislike: "Dislike",
+    report: "Report",
+    reportTitle: "Report this story",
+    reportLead: "Choose the most fitting reason. Notes are only visible to reviewers.",
+    reportReasons: ["Privacy leak", "Hate or harassment", "Dangerous content", "Spam", "Other"],
+    reportNote: "Additional note (optional)",
+    reportPlaceholder: "Share context that may help reviewers…",
+    reportContinue: "Review and continue",
+    reportConfirmTitle: "Submit this report?",
+    reportSubmit: "Submit report",
+    reportBack: "Back to edit",
+    reportDoneTitle: "Report received",
+    reportDoneBody: "Thank you for helping protect the community. Your identity will not be shown to the author before review.",
+    backToStory: "Back to story",
     resonanceGroups: [["City", "Near", "Different"], ["Life stage", "Near", "Different"], ["Theme", "Near", "Different"]],
     confirm: "Confirm",
   },
@@ -128,6 +176,8 @@ function Icon({ name, size = 22 }: { name: IconName; size?: number }) {
     book: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H7a3 3 0 0 0-3 3V5.5Z" /><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /></>,
     tune: <><path d="M4 7h10" /><path d="M18 7h2" /><circle cx="16" cy="7" r="2" /><path d="M4 17h2" /><path d="M10 17h10" /><circle cx="8" cy="17" r="2" /></>,
     heart: <path d="M20.8 8.6c0 5.2-8.8 10.4-8.8 10.4S3.2 13.8 3.2 8.6A4.6 4.6 0 0 1 12 6.7a4.6 4.6 0 0 1 8.8 1.9Z" />,
+    thumbsDown: <><path d="M10 15v4a3 3 0 0 0 3 3l4-9V3H5.7A2 2 0 0 0 3.8 4.4L2.4 9.4A2 2 0 0 0 4.3 12H10" /><path d="M17 3h2.5A2.5 2.5 0 0 1 22 5.5v5A2.5 2.5 0 0 1 19.5 13H17" /></>,
+    flag: <><path d="M5 21V4" /><path d="M5 4c4-2 6 2 10 0v10c-4 2-6-2-10 0" /></>,
     plus: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
     search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.6-3.6" /></>,
     x: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>,
@@ -374,57 +424,75 @@ function GalaxyScene({ activeView, selected, onSelect, zoom, themeMode, resonanc
   );
 }
 
+type GalaxyReaction = "like" | "dislike" | null;
+
 function StoryPanel({ node, language, onClose }: { node: StoryNodeData; language: "zh" | "en"; onClose: () => void }) {
   const t = galaxyCopy[language];
+  const [reaction, setReaction] = useState<GalaxyReaction>(null);
+  const [reportOpen, setReportOpen] = useState(false);
   return (
-    <aside className="story-panel" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
-      <button
-        className="story-panel-close-zone"
-        aria-label={t.closePanel}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        onPointerUp={(event) => {
-          event.stopPropagation();
-          onClose();
-        }}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClose();
-        }}
-      />
-      <button
-        className="neon-control story-panel-close"
-        tabIndex={-1}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        onPointerUp={(event) => event.stopPropagation()}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClose();
-        }}
-        aria-label={t.closePanel}
-      >
-        <Icon name="x" size={20} />
-      </button>
-      <div className="story-image-slot">
-        <span>{t.image}</span>
-        <i>✦</i>
-      </div>
-      <div className="story-panel-meta">
-        <span>{node.theme.toUpperCase()}</span>
-        <span>{t.escape}</span>
-      </div>
-      <h2>{node.label}</h2>
-      <p className="story-panel-stats">
-        <b style={{ background: themeColors[node.theme] }} />
-        {t.stats(node.words, node.similarity)}
-      </p>
-      <p>{node.desc}</p>
-      <div className="story-panel-divider" />
-      <div className="story-panel-tags">
-        {["异乡", "选择", "记忆", "城市", "共鸣"].map((tag) => <span key={tag}>{tag}</span>)}
-      </div>
-    </aside>
+    <>
+      <aside className="story-panel" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+        <button
+          className="story-panel-close-zone"
+          aria-label={t.closePanel}
+          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+        />
+        <button
+          className="neon-control story-panel-close"
+          tabIndex={-1}
+          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+          aria-label={t.closePanel}
+        >
+          <Icon name="x" size={20} />
+        </button>
+        <div className="story-image-slot">
+          <span>{t.image}</span>
+          <i>✦</i>
+        </div>
+        <div className="story-panel-meta">
+          <span>{node.theme.toUpperCase()}</span>
+          <span>{t.escape}</span>
+        </div>
+        <h2>{node.label}</h2>
+        <p className="story-panel-stats">
+          <b style={{ background: themeColors[node.theme] }} />
+          {t.stats(node.words, node.similarity)}
+        </p>
+        <p>{node.desc}</p>
+        <div className="story-panel-divider" />
+        <div className="story-panel-tags">
+          {["异乡", "选择", "记忆", "城市", "共鸣"].map((tag) => <span key={tag}>{tag}</span>)}
+        </div>
+        <div className="story-panel-actions">
+          <button className={reaction === "like" ? "is-active like" : ""} onClick={() => setReaction(reaction === "like" ? null : "like")}>
+            <Icon name="heart" size={16} />{t.like}
+          </button>
+          <button className={reaction === "dislike" ? "is-active dislike" : ""} onClick={() => setReaction(reaction === "dislike" ? null : "dislike")}>
+            <Icon name="thumbsDown" size={16} />{t.dislike}
+          </button>
+          <button onClick={() => setReportOpen(true)}>
+            <Icon name="flag" size={16} />{t.report}
+          </button>
+        </div>
+      </aside>
+      {reportOpen && <GalaxyReportDialog language={language} node={node} onClose={() => setReportOpen(false)} />}
+    </>
   );
 }
 
@@ -496,12 +564,86 @@ function ResonanceBar({
   );
 }
 
-function AccountDock({ language }: { language: "zh" | "en" }) {
+function AccountDock({ language, onLogout }: { language: "zh" | "en"; onLogout: () => void }) {
   const t = galaxyCopy[language];
+  const [accountOpen, setAccountOpen] = useState(false);
   return (
-    <div className="account-dock">
-      <button><Icon name="user" size={18} /><span>{t.account}</span></button>
-      <button aria-label={t.logout}><Icon name="logout" size={18} /></button>
+    <>
+      <div className="account-dock">
+        <button onClick={() => setAccountOpen(true)}><Icon name="user" size={18} /><span>{t.account}</span></button>
+        <button aria-label={t.logout} onClick={onLogout}><Icon name="logout" size={18} /></button>
+      </div>
+      {accountOpen && <AccountDialog language={language} onClose={() => setAccountOpen(false)} />}
+    </>
+  );
+}
+
+function AccountDialog({ language, onClose }: { language: "zh" | "en"; onClose: () => void }) {
+  const t = galaxyCopy[language];
+  const [saved, setSaved] = useState(false);
+  return (
+    <div className="galaxy-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <article className="galaxy-dialog account-dialog">
+        <button className="galaxy-dialog-close" onClick={onClose}><Icon name="x" size={18} /></button>
+        <p className="galaxy-dialog-eyebrow">Account</p>
+        <h2>{t.profileTitle}</h2>
+        <p>{saved ? t.profileSaved : t.profileLead}</p>
+        <div className="account-form">
+          <label>{t.nickname}<input placeholder={language === "zh" ? "StoryVerse 里的名字" : "Your StoryVerse name"} /></label>
+          <label>{t.password}<input type="password" placeholder={language === "zh" ? "输入新密码" : "Enter new password"} /></label>
+          <label>{t.email}<input type="email" placeholder="zicuili25@stu.pku.edu.cn" /></label>
+          <label className="wide">{t.feedback}<textarea placeholder={t.feedbackPlaceholder} /></label>
+        </div>
+        <button className="galaxy-primary" onClick={() => setSaved(true)}>{t.saveProfile}</button>
+      </article>
+    </div>
+  );
+}
+
+function GalaxyReportDialog({ language, node, onClose }: { language: "zh" | "en"; node: StoryNodeData; onClose: () => void }) {
+  const t = galaxyCopy[language];
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const [done, setDone] = useState(false);
+  return (
+    <div className="galaxy-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <article className="galaxy-dialog report-dialog-galaxy">
+        <button className="galaxy-dialog-close" onClick={onClose}><Icon name="x" size={18} /></button>
+        {done ? (
+          <>
+            <span className="galaxy-success">✓</span>
+            <h2>{t.reportDoneTitle}</h2>
+            <p>{t.reportDoneBody}</p>
+            <button className="galaxy-primary" onClick={onClose}>{t.backToStory}</button>
+          </>
+        ) : !confirm ? (
+          <>
+            <p className="galaxy-dialog-eyebrow">Community Safety</p>
+            <h2>{t.reportTitle}</h2>
+            <p>{t.reportLead}</p>
+            <div className="galaxy-report-reasons">
+              {t.reportReasons.map((item) => (
+                <button key={item} className={reason === item ? "is-selected" : ""} onClick={() => setReason(item)}>
+                  {reason === item ? "✓" : "○"} {item}
+                </button>
+              ))}
+            </div>
+            <label className="galaxy-note">{t.reportNote}<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder={t.reportPlaceholder} /></label>
+            <button className="galaxy-primary" disabled={!reason} onClick={() => setConfirm(true)}>{t.reportContinue}</button>
+          </>
+        ) : (
+          <>
+            <p className="galaxy-dialog-eyebrow">{language === "zh" ? "二次确认" : "Confirm"}</p>
+            <h2>{t.reportConfirmTitle}</h2>
+            <div className="galaxy-confirm-card"><span>{node.label}</span><b>{reason}</b>{note && <p>{note}</p>}</div>
+            <div className="galaxy-dialog-actions">
+              <button onClick={() => setConfirm(false)}>{t.reportBack}</button>
+              <button className="danger" onClick={() => setDone(true)}>{t.reportSubmit}</button>
+            </div>
+          </>
+        )}
+      </article>
     </div>
   );
 }
@@ -513,6 +655,7 @@ export function StoryGalaxy({
   onThemeModeChange,
   onWrite,
   onHome,
+  onLogout,
   resonance = defaultResonance,
   onResonanceChange,
 }: {
@@ -522,6 +665,7 @@ export function StoryGalaxy({
   onThemeModeChange: (themeMode: ThemeMode) => void;
   onWrite: () => void;
   onHome: () => void;
+  onLogout?: () => void;
   resonance?: ResonanceSelection;
   onResonanceChange?: (resonance: ResonanceSelection) => void;
 }) {
@@ -581,7 +725,7 @@ export function StoryGalaxy({
       <p className="bottom-legend">{t.legend}</p>
       {selected && <StoryPanel node={selected} language={language} onClose={() => setSelected(null)} />}
       {activeView === "resonance" && <ResonanceBar language={language} value={draftResonance} onChange={setDraftResonance} onConfirm={confirmResonance} />}
-      <AccountDock language={language} />
+      <AccountDock language={language} onLogout={onLogout ?? onHome} />
       <FloatingMenu activeView={activeView} language={language} onChange={handleViewChange} />
     </main>
   );
