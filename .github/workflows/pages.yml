@@ -2,7 +2,7 @@ name: Deploy StoryVerse to GitHub Pages
 
 on:
   push:
-    branches: ["main", "frontend-polish"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:

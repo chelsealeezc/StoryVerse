@@ -10,11 +10,7 @@ StoryVerse 是一个围绕真实人生经历展开的叙事共鸣产品。它希
 
 [https://chelsealeezc.github.io/StoryVerse/](https://chelsealeezc.github.io/StoryVerse/)
 
-当前主要迭代分支：
-
-[frontend-polish](https://github.com/chelsealeezc/StoryVerse/tree/frontend-polish)
-
-> GitHub Pages 由 `.github/workflows/pages.yml` 自动构建并发布。当前工作流支持从 `main` 和 `frontend-polish` 分支触发部署。
+> GitHub Pages 由 `.github/workflows/pages.yml` 自动构建并发布，仅在 `main` 更新后部署正式网页。
 
 ## 当前体验流程
 
@@ -89,7 +85,7 @@ DASHSCOPE_IMAGE_MODEL=wan2.7-image
 DASHSCOPE_QWEN_MODEL=qwen-plus
 ```
 
-随后运行 `npm run dev`。密钥只由本机 Vite 服务端读取，不会进入浏览器代码；千问先生成结构化四格分镜，万相 2.7 再生成四张连续画面。页面以 2×2 排列并可合成为一张 PNG 下载，图片不会上传长期存储。
+随后运行 `npm run dev`。密钥只由本机 Vite 服务端读取，不会进入浏览器代码。用户可选择卡通蜡笔风、简约写实风或复古拼贴风；千问先从正文提取一个忠于原文、适合静态画面的高光时刻，再生成结构化作画提示词，万相 2.7 按所选风格生成一张 3:4 竖版插画。示意图只用于网页预览，不会传给模型；生成图暂不上传长期存储。
 
 > GitHub Pages 是静态托管，不能安全保存 API Key。公开环境需要把 `/api/generate-image` 部署为独立的服务端接口，再通过 `VITE_IMAGE_API_URL` 指向该地址。
 
@@ -120,7 +116,7 @@ npm run build
 
 ## 部署
 
-推送到 `main` 或 `frontend-polish` 后，GitHub Actions 会自动运行：
+合并到 `main` 后，GitHub Actions 会自动运行：
 
 ```bash
 npm ci

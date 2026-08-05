@@ -1,29 +1,29 @@
 import type { Analysis, Draft } from "./types";
 
-export type ComicPanel = {
-  order: number;
-  purpose: string;
+export type ImageStyle = "crayon" | "minimal-realistic" | "retro-collage";
+
+export type StoryHighlight = {
+  title: string;
+  moment: string;
   scene: string;
   action: string;
-  shot: string;
   emotion: string;
 };
 
-export type ComicStoryboard = {
-  title: string;
-  visualStyle: string;
-  characterBible: string;
-  environment: string;
-  panels: ComicPanel[];
-};
-
-type ComicResponse = {
-  imageUrls?: string[];
-  storyboard?: ComicStoryboard;
+type StoryImageResponse = {
+  imageUrl?: string;
+  imageStyle?: ImageStyle;
+  highlight?: StoryHighlight;
+  imagePrompt?: string;
   error?: string;
 };
 
-export async function generateStoryComic(draft: Draft, analysis: Analysis, editedTags?: string[]) {
+export async function generateStoryImage(
+  draft: Draft,
+  analysis: Analysis,
+  imageStyle: ImageStyle,
+  editedTags?: string[],
+) {
   const endpoint = import.meta.env.VITE_IMAGE_API_URL || (import.meta.env.PROD
     ? "https://dcc1fc237cf0411084a6990a6cf00cfd-cn-hangzhou.alicloudapi.com/api/generate-image"
     : "/api/generate-image");
@@ -32,6 +32,8 @@ export async function generateStoryComic(draft: Draft, analysis: Analysis, edite
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      mode: "single-highlight-v1",
+      imageStyle,
       title: draft.title || analysis.suggestedTitle,
       story: draft.body,
       city: draft.city,
@@ -42,59 +44,25 @@ export async function generateStoryComic(draft: Draft, analysis: Analysis, edite
       tags,
     }),
   });
-  const result = await response.json().catch(() => ({})) as ComicResponse;
-  if (!response.ok || result.imageUrls?.length !== 4 || !result.storyboard) {
-    throw new Error(result.error || "四格漫画生成失败，请稍后重试。");
+  const result = await response.json().catch(() => ({})) as StoryImageResponse;
+  if (!response.ok || !result.imageUrl || !result.highlight || !result.imagePrompt || result.imageStyle !== imageStyle) {
+    throw new Error(result.error || "故事图片生成失败，请稍后重试。");
   }
-  return { imageUrls: result.imageUrls, storyboard: result.storyboard };
+  return {
+    imageUrl: result.imageUrl,
+    imageStyle: result.imageStyle,
+    highlight: result.highlight,
+    imagePrompt: result.imagePrompt,
+  };
 }
 
-function loadImage(url: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("漫画图片载入失败。"));
-    image.src = url;
-  });
+function safeFilename(value: string) {
+  return value.trim().replace(/[\\/:*?"<>|]+/g, "-").slice(0, 80) || "storyverse-highlight";
 }
 
-function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, size: number) {
-  const scale = Math.max(size / image.naturalWidth, size / image.naturalHeight);
-  const width = image.naturalWidth * scale;
-  const height = image.naturalHeight * scale;
-  context.drawImage(image, x + (size - width) / 2, y + (size - height) / 2, width, height);
-}
-
-export async function downloadFourPanelComic(imageUrls: string[], title: string) {
-  if (imageUrls.length !== 4) throw new Error("需要四张图片才能合成漫画。");
-  const images = await Promise.all(imageUrls.map(loadImage));
-  const canvas = document.createElement("canvas");
-  const canvasSize = 2048;
-  const outer = 32;
-  const gap = 24;
-  const panelSize = (canvasSize - outer * 2 - gap) / 2;
-  canvas.width = canvasSize;
-  canvas.height = canvasSize;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("浏览器无法合成漫画。");
-  context.fillStyle = "#f7f6f2";
-  context.fillRect(0, 0, canvasSize, canvasSize);
-  images.forEach((image, index) => {
-    const x = outer + (index % 2) * (panelSize + gap);
-    const y = outer + Math.floor(index / 2) * (panelSize + gap);
-    context.save();
-    context.beginPath();
-    context.rect(x, y, panelSize, panelSize);
-    context.clip();
-    drawCover(context, image, x, y, panelSize);
-    context.restore();
-  });
-  const blob = await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob(value => value ? resolve(value) : reject(new Error("漫画合成失败。")), "image/png")
-  );
+export function downloadStoryImage(imageUrl: string, title: string, imageStyle: ImageStyle) {
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `${title.trim() || "storyverse-four-panel"}.png`;
+  link.href = imageUrl;
+  link.download = `${safeFilename(title)}-${imageStyle}.png`;
   link.click();
-  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
