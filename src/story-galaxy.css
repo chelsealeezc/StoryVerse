@@ -729,6 +729,312 @@
  * 不会把这个宽度还回来。内容需要约 693px，却只分到 640px，于是每个中文标签
  * 被逐字折行成「城 / 市」「相 / 近」。这和屏幕宽窄无关，任何尺寸下都会发生。
  */
+
+.story-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+
+.story-panel-actions button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 999px;
+  color: rgba(255,255,255,0.76);
+  background: rgba(255,255,255,0.035);
+  font-size: 12px;
+  font-weight: 760;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.story-panel-actions button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(149,233,255,0.52);
+  color: #fff;
+  background: rgba(149,233,255,0.1);
+}
+
+.story-panel-actions button.is-active.like {
+  border-color: rgba(245,137,189,0.62);
+  color: #ffd6ea;
+  background: rgba(245,137,189,0.14);
+}
+
+.story-panel-actions button.is-active.dislike {
+  border-color: rgba(255,255,255,0.28);
+  color: #fff;
+  background: rgba(255,255,255,0.12);
+}
+
+.storyverse-root[data-theme="day"] .story-panel-actions {
+  border-color: rgba(65,45,30,0.16);
+}
+
+.storyverse-root[data-theme="day"] .story-panel-actions button {
+  border-color: rgba(65,45,30,0.16);
+  color: rgba(43,30,20,0.72);
+  background: rgba(255,255,255,0.34);
+}
+
+.storyverse-root[data-theme="day"] .story-panel-actions button.is-active.like {
+  border-color: rgba(245,137,189,0.42);
+  color: #8e315b;
+  background: rgba(245,137,189,0.18);
+}
+
+.galaxy-modal-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0,0,0,0.34);
+  backdrop-filter: blur(18px) saturate(126%);
+  -webkit-backdrop-filter: blur(18px) saturate(126%);
+  animation: galaxyFade 180ms ease;
+}
+
+.galaxy-dialog {
+  position: relative;
+  width: min(620px, 92vw);
+  padding: 32px;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 30px;
+  color: rgba(255,255,255,0.86);
+  background: linear-gradient(135deg, rgba(8,10,16,0.72), rgba(23,22,31,0.58));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 34px 120px rgba(0,0,0,0.68);
+  backdrop-filter: blur(28px) saturate(145%);
+  -webkit-backdrop-filter: blur(28px) saturate(145%);
+  animation: galaxyDialogIn 360ms cubic-bezier(.22,1,.36,1);
+}
+
+.storyverse-root[data-theme="day"] .galaxy-dialog {
+  border-color: rgba(65,45,30,0.18);
+  color: rgba(38,28,19,0.84);
+  background: linear-gradient(135deg, rgba(255,255,255,0.82), rgba(237,231,219,0.66));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.76), 0 34px 110px rgba(90,65,41,0.2);
+}
+
+.galaxy-dialog-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 50%;
+  color: inherit;
+  background: rgba(255,255,255,0.04);
+}
+
+.galaxy-dialog-eyebrow {
+  margin: 0 0 10px;
+  color: rgba(149,233,255,0.7);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.galaxy-dialog h2 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.15;
+  letter-spacing: -0.05em;
+}
+
+.galaxy-dialog > p:not(.galaxy-dialog-eyebrow) {
+  max-width: 520px;
+  margin: 14px 0 0;
+  color: rgba(255,255,255,0.62);
+  line-height: 1.7;
+  font-size: 14px;
+}
+
+.storyverse-root[data-theme="day"] .galaxy-dialog > p:not(.galaxy-dialog-eyebrow) {
+  color: rgba(43,30,20,0.62);
+}
+
+.account-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.account-form label,
+.galaxy-note {
+  display: grid;
+  gap: 8px;
+  color: rgba(255,255,255,0.72);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.storyverse-root[data-theme="day"] .account-form label,
+.storyverse-root[data-theme="day"] .galaxy-note {
+  color: rgba(43,30,20,0.68);
+}
+
+.account-form .wide {
+  grid-column: 1 / -1;
+}
+
+.account-form input,
+.account-form textarea,
+.galaxy-note textarea {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 16px;
+  color: #fff;
+  background: rgba(255,255,255,0.055);
+  outline: none;
+  font: inherit;
+}
+
+.account-form input {
+  height: 48px;
+  padding: 0 14px;
+}
+
+.account-form textarea,
+.galaxy-note textarea {
+  min-height: 112px;
+  resize: vertical;
+  padding: 14px;
+}
+
+.storyverse-root[data-theme="day"] .account-form input,
+.storyverse-root[data-theme="day"] .account-form textarea,
+.storyverse-root[data-theme="day"] .galaxy-note textarea {
+  border-color: rgba(65,45,30,0.16);
+  color: #241a12;
+  background: rgba(255,255,255,0.52);
+}
+
+.galaxy-primary,
+.galaxy-dialog-actions button {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(149,233,255,0.52);
+  border-radius: 999px;
+  color: #061f31;
+  background: #95e9ff;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.galaxy-primary {
+  width: 100%;
+  margin-top: 20px;
+}
+
+.galaxy-primary:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.galaxy-report-reasons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 22px 0 16px;
+}
+
+.galaxy-report-reasons button {
+  min-height: 44px;
+  padding: 0 13px;
+  text-align: left;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 14px;
+  color: rgba(255,255,255,0.72);
+  background: rgba(255,255,255,0.04);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.galaxy-report-reasons button.is-selected {
+  border-color: rgba(149,233,255,0.62);
+  color: #fff;
+  background: rgba(149,233,255,0.13);
+}
+
+.galaxy-confirm-card {
+  margin: 22px 0;
+  padding: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.045);
+}
+
+.galaxy-confirm-card span,
+.galaxy-confirm-card b,
+.galaxy-confirm-card p {
+  display: block;
+}
+
+.galaxy-confirm-card span {
+  color: rgba(255,255,255,0.46);
+  font-size: 12px;
+}
+
+.galaxy-confirm-card b {
+  margin-top: 8px;
+}
+
+.galaxy-dialog-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.galaxy-dialog-actions button {
+  color: rgba(255,255,255,0.82);
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.15);
+}
+
+.galaxy-dialog-actions .danger {
+  color: #fff;
+  border-color: rgba(245,137,189,0.4);
+  background: rgba(245,137,189,0.18);
+}
+
+.galaxy-success {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  margin: 0 0 18px;
+  border-radius: 50%;
+  color: #061f31;
+  background: #95e9ff;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+@keyframes galaxyFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes galaxyDialogIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .resonance-bar {
   position: fixed;
   z-index: 29;

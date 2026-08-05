@@ -1196,6 +1196,7 @@ export default function App() {
     onThemeModeChange={setThemeMode}
     onWrite={startNewStory}
     onHome={goHome}
+    onLogout={goHome}
     resonance={state.resonance}
     onResonanceChange={resonance => update({ resonance })}
   />;

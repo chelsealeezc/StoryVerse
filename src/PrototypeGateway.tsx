@@ -1,4 +1,4 @@
-import { CSSProperties, Ref, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import generatedPortalBg from "./assets/auragate-portal-bg-transparent.png";
 import nightWorldBg from "./assets/storyverse-night-bg.png";
 
@@ -37,19 +37,23 @@ const gatewayCopy = {
     previewSubtitle: "在 StoryVerse，看见和你天差地别的故事，也看见和你如此相似的人。",
     previousStory: "上一张故事卡片",
     nextStory: "下一张故事卡片",
-    footerColumns: [
-      ["探索", "它如何运作", "故事星图"],
-      ["联系", "X（Twitter）", "hello@storyverse.com"],
-      ["法律", "隐私政策", "服务条款"],
-    ],
+    footerHowItWorks: "它如何运作",
+    footerHowItWorksTitle: "新手引导正在准备中",
+    footerHowItWorksBody: "这里会接入一段轻量的新手引导，帮助第一次来到 StoryVerse 的用户理解如何写故事、选择共鸣方向、进入星图。",
+    footerContact: "联系",
+    footerRed: "小红书",
+    footerEmail: "zicuili25@stu.pku.edu.cn",
+    footerLegal: "法律",
+    footerPrivacy: "隐私政策",
+    footerTerms: "服务条款",
     loginEyebrow: "进入 StoryVerse",
     welcome: "欢迎来到",
     signup: "注册",
     login: "登录",
     nickname: "昵称",
     nicknamePlaceholder: "给自己起一个在 StoryVerse 中的名字吧",
-    email: "邮箱",
-    emailPlaceholder: "you@example.com",
+    email: "邮箱/电话",
+    emailPlaceholder: "邮箱或中国大陆手机号",
     password: "密码",
     signupPasswordPlaceholder: "设置一个安全密码",
     loginPasswordPlaceholder: "输入你的密码",
@@ -57,6 +61,17 @@ const gatewayCopy = {
     enter: "进入 StoryVerse",
     already: "已经有账户？",
     newHere: "第一次来到这里？",
+    forgotPrefix: "忘记密码？",
+    forgotAction: "点击找回",
+    resetTitle: "找回密码",
+    resetLead: "输入注册邮箱/手机号和新密码。后端接入后会自动发送短信或邮件验证码。",
+    resetAccount: "注册邮箱/手机号",
+    resetPassword: "新密码",
+    resetConfirm: "确认密码",
+    resetCode: "验证码",
+    sendCode: "发送验证码",
+    resetSubmit: "使用新密码",
+    resetDone: "密码重置前端流程已就绪，接入后端后即可发送验证码并更新密码。",
   },
   en: {
     homeAria: "Back to StoryVerse home",
@@ -72,19 +87,23 @@ const gatewayCopy = {
     previewSubtitle: "In StoryVerse, meet stories far from yours and people unexpectedly close to you.",
     previousStory: "Previous story card",
     nextStory: "Next story card",
-    footerColumns: [
-      ["Explore", "How it works", "Story Map"],
-      ["Contact", "X (Twitter)", "hello@storyverse.com"],
-      ["Legal", "Privacy Policy", "Terms of Service"],
-    ],
+    footerHowItWorks: "How it works",
+    footerHowItWorksTitle: "New user guide is in progress",
+    footerHowItWorksBody: "This will open a lightweight onboarding guide explaining how to write a story, choose resonance directions, and enter the atlas.",
+    footerContact: "Contact",
+    footerRed: "RED",
+    footerEmail: "zicuili25@stu.pku.edu.cn",
+    footerLegal: "Legal",
+    footerPrivacy: "Privacy Policy",
+    footerTerms: "Terms of Service",
     loginEyebrow: "Step into StoryVerse",
     welcome: "Welcome to",
     signup: "Sign up",
     login: "Log in",
     nickname: "Nickname",
     nicknamePlaceholder: "Choose a name for yourself in StoryVerse",
-    email: "Email",
-    emailPlaceholder: "you@example.com",
+    email: "Email / phone",
+    emailPlaceholder: "Email or Mainland China phone number",
     password: "Password",
     signupPasswordPlaceholder: "Create a strong password",
     loginPasswordPlaceholder: "Enter your password",
@@ -92,12 +111,30 @@ const gatewayCopy = {
     enter: "Enter StoryVerse",
     already: "Already have an account?",
     newHere: "New here?",
+    forgotPrefix: "Forgot password?",
+    forgotAction: "Recover",
+    resetTitle: "Recover password",
+    resetLead: "Enter your registered email/phone and new password. Backend integration will send the SMS/email code automatically.",
+    resetAccount: "Registered email / phone",
+    resetPassword: "New password",
+    resetConfirm: "Confirm password",
+    resetCode: "Verification code",
+    sendCode: "Send code",
+    resetSubmit: "Use new password",
+    resetDone: "Password reset frontend flow is ready. Backend can later send the code and update the password.",
   },
 } as const;
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(Math.max(value, min), max);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
+const privacyUrl = "https://icnh1tjz358q.feishu.cn/wiki/CG8Hw371bidxwDkT9YGck2kwnfe";
+const termsUrl = "https://icnh1tjz358q.feishu.cn/wiki/Wb3NwnFEWig5V0kTROGcd35nnlc";
+
+function isValidEmailOrChinaPhone(value: string) {
+  const trimmed = value.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) || /^1[3-9]\d{9}$/.test(trimmed);
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -429,25 +466,15 @@ export function Auragate({
   );
 
   useEffect(() => {
-    const skipButton = skipRef.current;
     const downHintButton = downHintRef.current;
-    const goAuth = (event: Event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      goToSection("auth");
-    };
     const goPreview = (event: Event) => {
       event.preventDefault();
       event.stopPropagation();
       goToSection("preview");
     };
-    skipButton?.addEventListener("pointerdown", goAuth);
-    skipButton?.addEventListener("click", goAuth);
     downHintButton?.addEventListener("pointerdown", goPreview);
     downHintButton?.addEventListener("click", goPreview);
     return () => {
-      skipButton?.removeEventListener("pointerdown", goAuth);
-      skipButton?.removeEventListener("click", goAuth);
       downHintButton?.removeEventListener("pointerdown", goPreview);
       downHintButton?.removeEventListener("click", goPreview);
     };
@@ -548,9 +575,9 @@ export function Auragate({
               <button
                 ref={skipRef}
                 type="button"
+                className="neon-control gateway-skip-control"
                 style={{ ...styles.watchDemo, padding: isMobile ? "9px 16px" : "11px 22px" }}
                 onClick={() => goToSection("auth")}
-                onPointerDown={() => goToSection("auth")}
               >
                 {t.skip}
               </button>
@@ -654,7 +681,7 @@ export function Auragate({
         <ImmersiveLogin
           isMobile={isMobile}
           onComplete={onComplete}
-          ref={loginRef}
+          authRef={loginRef}
           mode={authMode}
           language={language}
           onModeChange={mode => onAuthModeChange?.(mode)}
@@ -666,7 +693,8 @@ export function Auragate({
 }
 
 function Footer({ isMobile, language }: { isMobile: boolean; language: "zh" | "en" }) {
-  const columns = gatewayCopy[language].footerColumns;
+  const t = gatewayCopy[language];
+  const [guideOpen, setGuideOpen] = useState(false);
 
   return (
     <footer style={{ ...styles.footer, padding: isMobile ? "120px 22px 40px" : "160px 44px 52px" }}>
@@ -681,27 +709,55 @@ function Footer({ isMobile, language }: { isMobile: boolean; language: "zh" | "e
           <Wordmark isMobile={false} />
           <p style={styles.copyright}>© 2026 StoryVerse</p>
         </div>
-        {columns.map(([title, ...links]) => (
-          <div key={title}>
-            <h3 style={styles.footerTitle}>{title}</h3>
-            <div style={styles.footerLinks}>
-              {links.map((link) => (
-                <a href="#" key={link} style={styles.footerLink}>
-                  {link}
-                </a>
-              ))}
-            </div>
+        <div>
+          <h3 style={styles.footerTitle}>{language === "zh" ? "探索" : "Explore"}</h3>
+          <div style={styles.footerLinks}>
+            <button type="button" style={{ ...styles.footerLink, ...styles.footerButtonLink }} onClick={() => setGuideOpen(true)}>
+              {t.footerHowItWorks}
+            </button>
           </div>
-        ))}
+        </div>
+        <div>
+          <h3 style={styles.footerTitle}>{t.footerContact}</h3>
+          <div style={styles.footerLinks}>
+            <a href="https://www.xiaohongshu.com/" target="_blank" rel="noreferrer" style={styles.footerLink}>
+              {t.footerRed}
+            </a>
+            <a href={`mailto:${t.footerEmail}`} style={styles.footerLink}>
+              {t.footerEmail}
+            </a>
+          </div>
+        </div>
+        <div>
+          <h3 style={styles.footerTitle}>{t.footerLegal}</h3>
+          <div style={styles.footerLinks}>
+            <a href={privacyUrl} target="_blank" rel="noreferrer" style={styles.footerLink}>
+              {t.footerPrivacy}
+            </a>
+            <a href={termsUrl} target="_blank" rel="noreferrer" style={styles.footerLink}>
+              {t.footerTerms}
+            </a>
+          </div>
+        </div>
       </div>
+      {guideOpen && (
+        <div style={styles.gatewayModalBackdrop} onMouseDown={(event) => event.target === event.currentTarget && setGuideOpen(false)}>
+          <div style={styles.gatewayModal}>
+            <button type="button" style={styles.gatewayModalClose} onClick={() => setGuideOpen(false)}>×</button>
+            <p style={styles.gatewayModalEyebrow}>StoryVerse Guide</p>
+            <h2 style={styles.gatewayModalTitle}>{t.footerHowItWorksTitle}</h2>
+            <p style={styles.gatewayModalBody}>{t.footerHowItWorksBody}</p>
+          </div>
+        </div>
+      )}
     </footer>
   );
 }
 
-function ImmersiveLogin({ isMobile, onComplete, ref, mode, language, onModeChange }: {
+function ImmersiveLogin({ isMobile, onComplete, authRef, mode, language, onModeChange }: {
   isMobile: boolean;
   onComplete: () => void;
-  ref: Ref<HTMLElement>;
+  authRef: RefObject<HTMLElement>;
   mode: "signup" | "login";
   language: "zh" | "en";
   onModeChange: (mode: "signup" | "login") => void;
@@ -709,11 +765,12 @@ function ImmersiveLogin({ isMobile, onComplete, ref, mode, language, onModeChang
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const valid = email.includes("@") && password.length >= 6 && (mode === "login" || nickname.trim().length >= 2);
+  const [resetOpen, setResetOpen] = useState(false);
+  const valid = isValidEmailOrChinaPhone(email) && password.length >= 6 && (mode === "login" || nickname.trim().length >= 2);
   const t = gatewayCopy[language];
 
   return (
-    <section ref={ref} style={{ ...styles.loginSection, padding: isMobile ? "92px 22px 40px" : "132px 44px 36px" }}>
+    <section id="storyverse-auth" ref={authRef} style={{ ...styles.loginSection, padding: isMobile ? "92px 22px 40px" : "132px 44px 36px" }}>
       <div style={{ ...styles.loginPanel, gridTemplateColumns: isMobile ? "1fr" : "1fr 420px", minHeight: isMobile ? "auto" : "min(720px,78vh)" }}>
         <div style={styles.loginCopy}>
           <p style={styles.loginEyebrow}>{t.loginEyebrow}</p>
@@ -755,7 +812,8 @@ function ImmersiveLogin({ isMobile, onComplete, ref, mode, language, onModeChang
               style={styles.inputShell}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              type="email"
+              type="text"
+              inputMode="email"
               placeholder={t.emailPlaceholder}
             />
           </label>
@@ -772,15 +830,65 @@ function ImmersiveLogin({ isMobile, onComplete, ref, mode, language, onModeChang
           <button style={{ ...styles.primaryButton, opacity: valid ? 1 : 0.48, cursor: valid ? "pointer" : "not-allowed" }} disabled={!valid} onClick={onComplete}>
             {mode === "signup" ? t.createAccount : t.enter}
           </button>
-          <p style={styles.loginHint}>
-            {mode === "signup" ? `${t.already} ` : `${t.newHere} `}
-            <button type="button" style={styles.loginHintLink} onClick={() => onModeChange(mode === "signup" ? "login" : "signup")}>
-              {mode === "signup" ? t.login : t.signup}
-            </button>
-          </p>
+          <div style={styles.loginAssist}>
+            {mode === "login" && (
+              <p style={styles.loginHint}>
+                {t.forgotPrefix}{" "}
+                <button type="button" style={styles.loginHintLink} onClick={() => setResetOpen(true)}>
+                  {t.forgotAction}
+                </button>
+              </p>
+            )}
+            <p style={styles.loginHint}>
+              {mode === "signup" ? `${t.already} ` : `${t.newHere} `}
+              <button type="button" style={styles.loginHintLink} onClick={() => onModeChange(mode === "signup" ? "login" : "signup")}>
+                {mode === "signup" ? t.login : t.signup}
+              </button>
+            </p>
+          </div>
         </div>
       </div>
+      {resetOpen && <PasswordResetDialog language={language} onClose={() => setResetOpen(false)} />}
     </section>
+  );
+}
+
+function PasswordResetDialog({ language, onClose }: { language: "zh" | "en"; onClose: () => void }) {
+  const t = gatewayCopy[language];
+  const [account, setAccount] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState(false);
+  const [done, setDone] = useState(false);
+  const canSend = isValidEmailOrChinaPhone(account);
+  const canSubmit = canSend && password.length >= 6 && password === confirm && code.trim().length >= 4;
+
+  return (
+    <div style={styles.gatewayModalBackdrop} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div style={{ ...styles.gatewayModal, ...styles.resetModal }}>
+        <button type="button" style={styles.gatewayModalClose} onClick={onClose}>×</button>
+        <p style={styles.gatewayModalEyebrow}>Account Recovery</p>
+        <h2 style={styles.gatewayModalTitle}>{t.resetTitle}</h2>
+        <p style={styles.gatewayModalBody}>{done ? t.resetDone : t.resetLead}</p>
+        {!done && (
+          <div style={styles.resetForm}>
+            <label style={styles.resetLabel}>{t.resetAccount}<input style={styles.resetInput} value={account} onChange={(event) => setAccount(event.target.value)} placeholder={t.emailPlaceholder} /></label>
+            <label style={styles.resetLabel}>{t.resetPassword}<input style={styles.resetInput} value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder={t.signupPasswordPlaceholder} /></label>
+            <label style={styles.resetLabel}>{t.resetConfirm}<input style={styles.resetInput} value={confirm} onChange={(event) => setConfirm(event.target.value)} type="password" placeholder={t.resetConfirm} /></label>
+            <div style={styles.resetCodeRow}>
+              <label style={{ ...styles.resetLabel, margin: 0 }}>{t.resetCode}<input style={styles.resetInput} value={code} onChange={(event) => setCode(event.target.value)} placeholder="123456" /></label>
+              <button type="button" style={{ ...styles.resetSecondary, opacity: canSend ? 1 : 0.48 }} disabled={!canSend} onClick={() => setSent(true)}>
+                {sent ? (language === "zh" ? "已发送" : "Sent") : t.sendCode}
+              </button>
+            </div>
+            <button type="button" style={{ ...styles.primaryButton, marginTop: 18, opacity: canSubmit ? 1 : 0.48 }} disabled={!canSubmit} onClick={() => setDone(true)}>
+              {t.resetSubmit}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -862,6 +970,8 @@ const styles: Record<string, CSSProperties> = {
     pointerEvents: "auto",
   },
   watchDemo: {
+    position: "relative",
+    zIndex: 80,
     border: 0,
     borderRadius: 999,
     background: "#fff",
@@ -870,6 +980,8 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     transition: "background 0.25s",
     cursor: "pointer",
+    pointerEvents: "auto",
+    touchAction: "manipulation",
   },
   introTrack: {
     position: "relative",
@@ -1263,10 +1375,16 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 14px 34px rgba(0,87,255,0.34)",
   },
   loginHint: {
-    margin: "18px 0 0",
+    margin: 0,
     textAlign: "center",
     color: "rgba(255,255,255,0.66)",
     fontSize: 13,
+  },
+  loginAssist: {
+    display: "grid",
+    gap: 10,
+    marginTop: 18,
+    justifyItems: "center",
   },
   loginHintLink: {
     border: 0,
@@ -1298,9 +1416,118 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
   },
   footerLink: {
+    display: "inline-flex",
+    alignItems: "center",
     color: "#fff",
     fontWeight: 500,
     fontSize: 14,
     textDecoration: "none",
+  },
+  footerButtonLink: {
+    border: 0,
+    padding: 0,
+    background: "transparent",
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: "inherit",
+  },
+  gatewayModalBackdrop: {
+    position: "fixed",
+    zIndex: 90,
+    inset: 0,
+    display: "grid",
+    placeItems: "center",
+    padding: 22,
+    background: "rgba(0,28,46,0.34)",
+    backdropFilter: "blur(18px)",
+    WebkitBackdropFilter: "blur(18px)",
+  },
+  gatewayModal: {
+    position: "relative",
+    width: "min(520px, 92vw)",
+    padding: "34px 34px 32px",
+    border: "1px solid rgba(255,255,255,0.48)",
+    borderRadius: 30,
+    color: "#fff",
+    background: "linear-gradient(145deg, rgba(18,184,238,0.28), rgba(255,255,255,0.14))",
+    boxShadow: "inset 0 1px 1px rgba(255,255,255,0.5), 0 34px 90px rgba(0,57,104,0.28)",
+    backdropFilter: "blur(28px) saturate(150%)",
+    WebkitBackdropFilter: "blur(28px) saturate(150%)",
+  },
+  gatewayModalClose: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    width: 38,
+    height: 38,
+    border: "1px solid rgba(255,255,255,0.44)",
+    borderRadius: "50%",
+    color: "#fff",
+    background: "rgba(255,255,255,0.16)",
+    fontSize: 24,
+    lineHeight: 1,
+    cursor: "pointer",
+  },
+  gatewayModalEyebrow: {
+    margin: 0,
+    color: "rgba(255,255,255,0.68)",
+    fontSize: 12,
+    fontWeight: 800,
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+  },
+  gatewayModalTitle: {
+    margin: "12px 0 10px",
+    fontSize: 30,
+    lineHeight: 1.2,
+    letterSpacing: "-0.04em",
+  },
+  gatewayModalBody: {
+    margin: 0,
+    color: "rgba(255,255,255,0.76)",
+    fontSize: 14,
+    lineHeight: 1.75,
+  },
+  resetModal: {
+    width: "min(560px, 92vw)",
+  },
+  resetForm: {
+    display: "grid",
+    gap: 14,
+    marginTop: 22,
+  },
+  resetLabel: {
+    display: "grid",
+    gap: 8,
+    color: "rgba(255,255,255,0.86)",
+    fontSize: 13,
+    fontWeight: 750,
+  },
+  resetInput: {
+    height: 50,
+    padding: "0 16px",
+    border: "1px solid rgba(255,255,255,0.42)",
+    borderRadius: 16,
+    outline: "none",
+    color: "#132030",
+    background: "rgba(255,255,255,0.86)",
+    fontSize: 14,
+    fontWeight: 650,
+  },
+  resetCodeRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr 138px",
+    gap: 12,
+    alignItems: "end",
+  },
+  resetSecondary: {
+    height: 50,
+    border: "1px solid rgba(255,255,255,0.5)",
+    borderRadius: 16,
+    color: "#063d5d",
+    background: "rgba(255,255,255,0.88)",
+    fontSize: 13,
+    fontWeight: 850,
+    cursor: "pointer",
   },
 };
