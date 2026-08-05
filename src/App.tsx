@@ -5,8 +5,11 @@ import {
   Orbit, RefreshCw, Search, SlidersHorizontal, Sparkles, ThumbsDown, X,
 } from "lucide-react";
 import { extractHints } from "./ai";
+import crayonStylePreview from "./assets/image-styles/crayon.jpg";
+import minimalRealisticStylePreview from "./assets/image-styles/minimal-realistic.jpg";
+import retroCollageStylePreview from "./assets/image-styles/retro-collage.jpg";
 import { guides, icebreakers, mockAnalysis, stories } from "./data";
-import { downloadFourPanelComic, generateStoryComic, type ComicStoryboard } from "./image";
+import { downloadStoryImage, generateStoryImage, type ImageStyle, type StoryHighlight } from "./image";
 import { formatCoords, geocodePlace, searchPlaces } from "./places";
 import { initialState, loadState, saveState } from "./storage";
 import { Auragate as PrototypeGateway } from "./PrototypeGateway";
@@ -20,6 +23,17 @@ const themeColors: Record<string, string> = {
   家庭: "#ff5b45", 成长: "#b8eb00", 迁移: "#1769ff", 关系: "#ffcc23",
   工作: "#151515", 身份: "#9f7aea",
 };
+
+const imageStyleOptions: Array<{
+  id: ImageStyle;
+  label: string;
+  description: string;
+  preview: string;
+}> = [
+  { id: "crayon", label: "卡通蜡笔风", description: "笨拙涂鸦、蜡笔线条与俏皮手绘感", preview: crayonStylePreview },
+  { id: "minimal-realistic", label: "简约写实风", description: "扁平丝网印刷、颗粒肌理与高饱和留白", preview: minimalRealisticStylePreview },
+  { id: "retro-collage", label: "复古拼贴风", description: "撕纸层次、粉彩纸纹与温暖编辑感", preview: retroCollageStylePreview },
+];
 
 const PORTAL_BG = "https://res.cloudinary.com/dy5er7kv5/image/upload/q_auto/f_auto/v1781046673/image_1_ksxfzb.png";
 const WORLD_BG = "https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260609_231253_53c0854c-d13c-42c1-9fc0-17e87cd34091.png&w=1280&q=85";
@@ -637,8 +651,10 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const [editingBody, setEditingBody] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [tagDrafts, setTagDrafts] = useState<Record<string, string[]>>({});
-  const [storyImages, setStoryImages] = useState<string[]>([]);
-  const [comicStoryboard, setComicStoryboard] = useState<ComicStoryboard | null>(null);
+  const [imageStyle, setImageStyle] = useState<ImageStyle>("minimal-realistic");
+  const [storyImage, setStoryImage] = useState("");
+  const [storyHighlight, setStoryHighlight] = useState<StoryHighlight | null>(null);
+  const [imagePrompt, setImagePrompt] = useState("");
   const [imageStatus, setImageStatus] = useState<"idle" | "generating" | "ready" | "failed">("idle");
   const [imageError, setImageError] = useState("");
   const hints = useMemo(() => extractHints(draft.body), [draft.body]);
@@ -650,14 +666,24 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
     setImageStatus("generating");
     setImageError("");
     try {
-      const result = await generateStoryComic(draft, state.analysis, Object.values(tagDrafts).flat());
-      setStoryImages(result.imageUrls);
-      setComicStoryboard(result.storyboard);
+      const result = await generateStoryImage(draft, state.analysis, imageStyle, Object.values(tagDrafts).flat());
+      setStoryImage(result.imageUrl);
+      setStoryHighlight(result.highlight);
+      setImagePrompt(result.imagePrompt);
       setImageStatus("ready");
     } catch (error) {
       setImageStatus("failed");
       setImageError(error instanceof Error ? error.message : "图片生成失败，请稍后重试。");
     }
+  };
+  const chooseImageStyle = (nextStyle: ImageStyle) => {
+    if (nextStyle === imageStyle) return;
+    setImageStyle(nextStyle);
+    setStoryImage("");
+    setStoryHighlight(null);
+    setImagePrompt("");
+    setImageStatus("idle");
+    setImageError("");
   };
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -915,21 +941,36 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
               const full = cappedTags.length >= 3;
               return <div className="tag-layer" key={layer}><span>{({topic:"主题", emotion:"情绪", meaning:"意义"} as Record<string,string>)[layer]}</span><div>{cappedTags.map(tag => <button key={tag} onClick={() => removeTag(layer, tag)}>{tag}<X size={13} /></button>)}<button className="add-tag" disabled={full} onClick={() => addTag(layer)}>＋ 预设</button><button className="add-tag" disabled={full} onClick={() => addTag(layer, true)}>＋ 其他</button>{full && <small className="tag-limit">最多 3 个</small>}</div></div>;
             })}
+            <fieldset className="image-style-picker">
+              <legend>生成的图片风格</legend>
+              <p>悬浮或聚焦可以查看风格示意图</p>
+              <div className="image-style-options">
+                {imageStyleOptions.map(option => <label className={`image-style-option ${imageStyle === option.id ? "selected" : ""}`} key={option.id}>
+                  <input type="radio" name="image-style" value={option.id} checked={imageStyle === option.id} onChange={() => chooseImageStyle(option.id)} />
+                  <span className="image-style-copy"><b>{option.label}</b><small>{option.description}</small></span>
+                  <span className="image-style-peek"><Eye size={14} />示意图</span>
+                  <figure className="image-style-popover">
+                    <img src={option.preview} alt={`${option.label}示意图`} />
+                    <figcaption>{option.label}</figcaption>
+                  </figure>
+                </label>)}
+              </div>
+            </fieldset>
             <div className="comic-preview">
-              <div className={`comic-frame ${storyImages.length === 4 ? "generated comic-grid" : ""}`}>
-                {storyImages.length === 4 ? (
-                  storyImages.map((image, index) => <figure className="comic-panel" key={index}><img src={image} alt={`《${draft.title || state.analysis!.suggestedTitle}》第 ${index + 1} 格`} /></figure>)
+              <div className={`comic-frame ${storyImage ? "generated single-story-image" : ""}`}>
+                {storyImage ? (
+                  <img src={storyImage} alt={`《${draft.title || state.analysis!.suggestedTitle}》的故事高光插画`} />
                 ) : imageStatus === "generating" ? (
-                  <div className="comic-state"><LoaderCircle className="comic-spinner" size={38} /><b>正在创作四格漫画…</b><small>千问正在拆解分镜，万相随后绘制四张连续画面，可能需要一两分钟</small></div>
+                  <div className="comic-state"><LoaderCircle className="comic-spinner" size={38} /><b>正在寻找故事的高光时刻…</b><small>千问会先提取最值得画下来的瞬间，万相随后生成一张 {imageStyleOptions.find(option => option.id === imageStyle)?.label} 插画</small></div>
                 ) : imageStatus === "failed" ? (
-                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>这次没有完成四格</b><small>{imageError}</small><button className="retry-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成四格</button></div>
+                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>这次没有完成故事图片</b><small>{imageError}</small><button className="retry-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成图片</button></div>
                 ) : (
-                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>把故事变成四格漫画</b><small>将生成起因、发展、转折和结局四张连续画面</small><button className="retry-comic" onClick={() => void runImageGeneration()}>生成四格漫画</button></div>
+                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>把故事高光变成一张插画</b><small>AI 会从正文中选择一个真实、可画的关键瞬间，并按你选择的风格生成</small><button className="retry-comic" onClick={() => void runImageGeneration()}>生成故事图片</button></div>
                 )}
               </div>
-              {storyImages.length === 4 && <div className="comic-actions"><button className="download-comic" onClick={() => void downloadFourPanelComic(storyImages, draft.title || state.analysis!.suggestedTitle)}><Download size={16} />合成并下载四格 PNG</button><button className="regenerate-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成</button></div>}
-              {comicStoryboard && <details className="comic-storyboard"><summary>查看四格分镜</summary><ol>{comicStoryboard.panels.map(panel => <li key={panel.order}><b>{panel.order}. {panel.purpose}</b><span>{panel.scene} · {panel.action}</span></li>)}</ol></details>}
-              <p className="comic-privacy">生成时会将故事正文发送给阿里云百炼；每次生成四张图片并按四张计费。图片只保留在当前页面，刷新后消失。</p>
+              {storyImage && <div className="comic-actions"><button className="download-comic" onClick={() => downloadStoryImage(storyImage, draft.title || state.analysis!.suggestedTitle, imageStyle)}><Download size={16} />下载故事图片</button><button className="regenerate-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成</button></div>}
+              {storyHighlight && <details className="comic-storyboard"><summary>查看 AI 选中的高光时刻</summary><div className="highlight-detail"><b>{storyHighlight.title}</b><p>{storyHighlight.moment}</p><span>{storyHighlight.scene} · {storyHighlight.action}</span><em>{storyHighlight.emotion}</em>{imagePrompt && <details><summary>查看绘画 Prompt</summary><p>{imagePrompt}</p></details>}</div></details>}
+              <p className="comic-privacy">生成时会将故事正文发送给阿里云百炼；每次只生成一张图片并按一张计费。图片只保留在当前页面，刷新后消失。</p>
             </div>
             <div className="publish-note"><Check size={17} />确认后将进入模拟安全检查，并匿名加入故事池。</div>
             <PrimaryButton onClick={onPublished}>{t.publish}</PrimaryButton>
