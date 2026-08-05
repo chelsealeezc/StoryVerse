@@ -1194,7 +1194,17 @@ function Atlas({ state, update, onWrite, onHome }: { state: AppState; update: Ap
 
 export default function App() {
   const initialRoute = typeof window !== "undefined" ? routePatchFromPath() : {};
-  const [state, setState] = useState<AppState>(() => ({ ...loadState(), ...initialRoute }));
+  const [state, setState] = useState<AppState>(() => {
+    const loaded = { ...loadState(), ...initialRoute };
+    /*
+     * 加 ?tour=1 可以把新手引导重新打开一次，方便演示和回归验证。
+     * 引导一旦看完或跳过就永久关闭，否则想再看一遍只能去清 localStorage。
+     */
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("tour")) {
+      return { ...loaded, tour: { enabled: true, seen: [] } };
+    }
+    return loaded;
+  });
   const [gatewaySection, setGatewaySection] = useState<"intro" | "preview" | "auth">(() => initialRoute.gatewaySection ?? "intro");
   const [authMode, setAuthMode] = useState<"signup" | "login">(() => initialRoute.authMode ?? "signup");
   const [themeMode, setThemeMode] = useState<ThemeMode>("day");
@@ -1263,7 +1273,9 @@ export default function App() {
       language={state.language}
       onLanguageChange={language => update({ language })}
       onHome={goHome}
-      onComplete={() => update({ onboarded: true, accountCreated: true, screen: state.firstStoryComplete ? "atlas" : "wizard" })}
+      /* 引导要求「先认识星空大厅，最后才介绍写故事按钮」，所以引导还开着时注册完
+         先落在大厅，由引导最后一步把人送进写作流程；引导关掉后恢复原行为。 */
+      onComplete={() => update({ onboarded: true, accountCreated: true, screen: state.firstStoryComplete || state.tour.enabled ? "atlas" : "wizard" })}
       section={gatewaySection}
       authMode={authMode}
       onAuthModeChange={setAuthMode}
