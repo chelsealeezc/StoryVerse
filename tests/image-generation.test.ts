@@ -31,10 +31,31 @@ describe("single highlight image prompts", () => {
     const prompts = IMAGE_STYLES.map(style => buildSingleImagePrompt(highlight, style));
     expect(new Set(prompts).size).toBe(3);
     prompts.forEach(prompt => {
-      expect(prompt).toContain("one image only");
-      expect(prompt).toContain("3:4 vertical");
+      expect(prompt).toContain("只生成一张图");
+      expect(prompt).toContain("3:4 竖版");
+      expect(prompt).toContain("无字纯色块");
+      expect(prompt.length).toBeLessThan(5000);
       expect(prompt).not.toMatch(/attached image|武政谅|Take a small break|Soft little moment/i);
     });
+    expect(prompts[0]).toContain("儿童蜡笔与鼠标涂鸦");
+    expect(prompts[0]).toContain("不要日漫脸");
+    expect(prompts[1]).toContain("4–6 种实色油墨");
+    expect(prompts[1]).toContain("不要日漫");
+    expect(prompts[2]).toContain("撕纸纤维边");
+    expect(prompts[2]).toContain("不要普通数码插画");
+  });
+
+  it("adds explicit spatial choreography and story-specific exclusions when available", () => {
+    const prompt = buildSingleImagePrompt({
+      ...highlight,
+      spatialLayout: "人物A在右侧，用右手把伞柄递向左侧的人物B，两人相隔一步。",
+      mustShow: ["一把完整且连续的透明伞", "两个人物"],
+      mustAvoid: ["人物B手中提前出现第二把伞"],
+    }, "retro-collage");
+
+    expect(prompt).toContain("【空间与动作关系】人物A在右侧");
+    expect(prompt).toContain("【必须出现】一把完整且连续的透明伞；两个人物");
+    expect(prompt).toContain("人物B手中提前出现第二把伞");
   });
 
   it("requests one portrait image without sequential comic generation", () => {
@@ -42,6 +63,7 @@ describe("single highlight image prompts", () => {
       enable_sequential: false,
       n: 1,
       size: "1104*1472",
+      thinking_mode: true,
       watermark: false,
     });
   });

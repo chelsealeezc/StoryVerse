@@ -23,7 +23,7 @@ export const SINGLE_IMAGE_PARAMETERS = {
   enable_sequential: false,
   n: 1,
   size: "1104*1472",
-  thinking_mode: false,
+  thinking_mode: true,
   watermark: false,
 } as const;
 
@@ -36,6 +36,9 @@ export type StoryHighlight = {
   composition: string;
   colorPalette: string[];
   contentPrompt: string;
+  spatialLayout?: string;
+  mustShow?: string[];
+  mustAvoid?: string[];
 };
 
 type HandlerOptions = {
@@ -65,9 +68,21 @@ type Storyboard = {
 };
 
 const STYLE_PROMPTS: Record<ImageStyle, string> = {
-  crayon: `Cartoon crayon illustration with an intentionally clumsy, scribbly, awkward handmade look. Uneven mouse-drawn and wax-crayon lines, wobbly shapes, naive proportions, simple blocks of the supplied story palette, charming low-fidelity MS Paint energy, visibly imperfect and playful. The scene must remain understandable while feeling delightfully amateur and spontaneous.`,
-  "minimal-realistic": `Minimal editorial illustration with a restrained realistic sense of place. Flat screen-print layers, eye-level viewpoint, ultra-simple composition, subtle grain texture, crisp silhouettes, bold high-saturation color fields, generous negative space, clean contemporary print finish, no photographic rendering.`,
-  "retro-collage": `Warm handmade vintage editorial collage. Flat layered paper cutouts, soft pastel paper texture, torn paper edges, gentle paper shadows, sparse black doodle accents, modern Korean editorial layout, simplified rounded characters with minimal facial features, a relaxed small smile, casual clothing, a few relevant paper props, and generous clean negative space. Calm, cozy, light, cute, tactile, and uncluttered.`,
+  crayon: `媒介锁定：真正粗糙、笨拙的儿童蜡笔与鼠标涂鸦，不是精致商业插画。使用干涩蜡笔颗粒、断断续续且反复描过的歪斜轮廓、轻微涂出边界的色块、偶尔露出的纸张底色、简单几何形和天真比例。人物五官只用点与短线，手部简化但数量正确；画面像普通人用蜡笔和旧版画图软件认真却不熟练地画成，低保真、可爱、诚恳、略显局促。必须保持故事动作一眼可读。`,
+  "minimal-realistic": `媒介锁定：极简丝网印刷海报插画，不是动漫或照片。人物比例自然可信，但用大块几何剪影概括；只使用 4–6 种实色油墨，平涂、几乎无渐变，套色边缘轻微错位，均匀可见的细颗粒与半调网点。平视视角，清晰轮廓，背景压缩成少量水平或垂直色块，大面积留白，高饱和主色配一个温暖强调色。整体克制、安静、现代，像印在略粗糙纸张上的编辑海报。`,
+  "retro-collage": `媒介锁定：真实手工纸张剪贴拼贴，不是数码绘画。人物、衣服、道具、雨水和背景都由彼此独立的剪纸层构成；必须清楚看见撕纸纤维边、剪刀切边、纸张厚度、层叠错位、柔和投影、胶带或胶点和不同纸材纹理。人物是圆润简化的韩系纸偶，五官极少；加入 2–4 个与故事有关的小型纸质道具，以及少量黑色手绘点线。以暖奶油色纸为底，主体略偏下并偏离中心，保留大面积干净留白，形成轻盈、温暖、复古杂志剪贴本质感。`,
+};
+
+const STYLE_COMPOSITION_GUIDANCE: Record<ImageStyle, string> = {
+  crayon: "选择能用少量人物和大形状讲清楚的中近景；背景只保留辨认地点所需的 2–4 个元素，动作轮廓必须简单清楚。",
+  "minimal-realistic": "采用平视中景或稍远景，把人物放在画面下半部或三分线位置，用建筑、道路或窗框形成简洁几何关系，并保留明显留白。",
+  "retro-collage": "主体略微靠下且偏离中心，另一侧保留至少三分之一奶油色纸面留白；只选择 2–4 个有叙事意义的拼贴道具，避免铺满画面。",
+};
+
+const STYLE_EXCLUSIONS: Record<ImageStyle, string> = {
+  crayon: "不要日漫脸、精致线稿、矢量描边、光滑渐变、电影级光影、写实皮肤、复杂建筑细节或专业儿童绘本质感。",
+  "minimal-realistic": "不要日漫、照片写实、3D 渲染、水彩晕染、铅笔线稿、复杂纹理、细碎背景、夸张景深或戏剧性电影光效。",
+  "retro-collage": "不要普通数码插画、动漫线稿、水彩、油画、3D 黏土、光滑矢量形状、完整连续描边、拥挤剪贴、深色奢华海报或可读文字。",
 };
 
 function isImageStyle(value: unknown): value is ImageStyle {
@@ -146,10 +161,15 @@ JSON 结构必须为：
   "emotion": "通过姿态、光线和距离表达的核心情绪",
   "composition": "适合 3:4 竖版的主体位置、视角、景别和留白",
   "colorPalette": ["3 至 6 个与故事相符的颜色或色调"],
-  "contentPrompt": "完整的中文文生图内容描述，只描述故事主体、场景、动作、构图、光线和色彩，不重复风格模板"
+  "contentPrompt": "不超过 220 字的中文可视化内容描述，只写一个瞬间中的主体、场景、动作、光线和色彩，不写画风",
+  "spatialLayout": "用人物A/人物B/关键道具描述左右、前后、朝向、手部动作及彼此距离，避免动作歧义",
+  "mustShow": ["2 至 5 个证明这是原文高光时刻的必要视觉事实"],
+  "mustAvoid": ["2 至 5 个容易误读故事或破坏动作逻辑的具体画面错误"]
 }
 
-选择规则：高光必须真实存在于故事中；优先选择情绪或意义发生变化且能被一个静止画面表达的瞬间；不得把多个时间点拼在一起；不得新增重大事件、人物、地点或道具；不使用真实姓名，不猜测真实长相；不用对白、旁白或画面文字；避免血腥和敏感细节。
+选择规则：高光必须真实存在于故事中；优先选择情绪或意义发生变化且能被一个静止画面表达的瞬间；不得把多个时间点拼在一起；不得新增重大事件、人物、地点或道具；只保留完成这个动作所需的人物和道具；明确谁在做什么、道具由哪只手持有、递向谁以及人物相对位置；不使用真实姓名，不猜测真实长相；不用对白、旁白或画面文字；避免血腥和敏感细节。
+
+本风格的构图约束：${STYLE_COMPOSITION_GUIDANCE[imageStyle]}
 
 用户选择的图片风格：${imageStyle}
 标题：${input.title}
@@ -165,6 +185,9 @@ JSON 结构必须为：
 export function validateHighlight(value: unknown): StoryHighlight {
   if (!value || typeof value !== "object") throw new Error("HIGHLIGHT_INVALID");
   const raw = value as Partial<StoryHighlight>;
+  const spatialLayout = clean(raw.spatialLayout, 600);
+  const mustShow = cleanList(raw.mustShow, 5, 100);
+  const mustAvoid = cleanList(raw.mustAvoid, 5, 100);
   const highlight = {
     title: clean(raw.title, 120) || "故事的高光时刻",
     moment: clean(raw.moment, 360),
@@ -173,7 +196,10 @@ export function validateHighlight(value: unknown): StoryHighlight {
     emotion: clean(raw.emotion, 240),
     composition: clean(raw.composition, 400),
     colorPalette: cleanList(raw.colorPalette, 6, 40),
-    contentPrompt: clean(raw.contentPrompt, 1800),
+    contentPrompt: clean(raw.contentPrompt, 1200),
+    ...(spatialLayout ? { spatialLayout } : {}),
+    ...(mustShow.length ? { mustShow } : {}),
+    ...(mustAvoid.length ? { mustAvoid } : {}),
   };
   if (!highlight.moment || !highlight.scene || !highlight.action || !highlight.emotion || !highlight.composition || !highlight.contentPrompt) {
     throw new Error("HIGHLIGHT_INVALID");
@@ -211,18 +237,27 @@ async function createHighlight(
 
 export function buildSingleImagePrompt(highlight: StoryHighlight, imageStyle: ImageStyle) {
   const palette = highlight.colorPalette.length ? highlight.colorPalette.join("、") : "从故事场景中提取自然配色";
-  return `Create one complete 3:4 vertical editorial story illustration of this exact highlight. This is a text-to-image request created from the story; do not copy the subject or composition of any example image.
+  const spatialLayout = highlight.spatialLayout ? `\n【空间与动作关系】${highlight.spatialLayout}` : "";
+  const mustShow = highlight.mustShow?.length ? `\n【必须出现】${highlight.mustShow.join("；")}` : "";
+  const storySpecificAvoid = highlight.mustAvoid?.length ? `；${highlight.mustAvoid.join("；")}` : "";
 
-Story content: ${highlight.contentPrompt}
-Visible scene: ${highlight.scene}
-Visible action: ${highlight.action}
-Emotion: ${highlight.emotion}
-Composition: ${highlight.composition}
-Color palette: ${palette}
+  return `生成一张完整的 3:4 竖版单幅故事图。先严格锁定下面的视觉媒介，再绘制故事内容；不要把它变成通用数码插画。
 
-Selected visual style: ${STYLE_PROMPTS[imageStyle]}
+【画风与媒介——最高优先级】
+${STYLE_PROMPTS[imageStyle]}
 
-Hard requirements: one image only; 3:4 vertical composition; preserve the described people, action, setting and emotional meaning; no text, letters, captions, speech bubbles, title, numbers, logo, signature, watermark, comic panels or borders; no photorealistic identity reconstruction; no extra limbs, duplicated people or irrelevant decorative clutter; avoid blood, graphic harm and sensitive details.`;
+【主体与唯一动作】
+${highlight.contentPrompt}
+动作必须准确表现为：${highlight.action}
+
+【场景】${highlight.scene}${spatialLayout}
+【构图与镜头】${highlight.composition}
+【情绪】${highlight.emotion}
+【限定色板】${palette}${mustShow}
+
+【必须排除】
+${STYLE_EXCLUSIONS[imageStyle]}${storySpecificAvoid}
+只生成一张图，不生成四格、分镜、拼版或边框。画面中完全不出现文字、字母、汉字、数字、标题、对白、路牌文字、标志、签名或水印；需要招牌时只画无字纯色块。不要增加故事之外的人物和道具。人物数量正确，双手和四肢数量正确，手指可按所选画风简化；关键道具必须完整、连续且不悬空，人物与道具的接触关系清楚。不要复原真实人物身份，不表现血腥或敏感细节。`;
 }
 
 async function generateSingleImage(prompt: string, apiKey: string, baseUrl: string, model: string) {
