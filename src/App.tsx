@@ -582,7 +582,7 @@ function CityField({ draft, setDraft, label }: { draft: Draft; setDraft: (patch:
   };
 
   return (
-    <label><span className="field-name">{label} <small>海内外都可以填</small></span>
+    <label><span className="field-name">{label} <small>（海内外都可以填）</small></span>
       <div className="city-field">
         <input
           value={query}
@@ -900,10 +900,11 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
             <p className="eyebrow">{t.finalSay}</p>
             <h1>{t.confirmTitle}</h1>
             <div className="compact-edit-grid">
-              <label>{t.storyTitle}<input value={draft.title || state.analysis.suggestedTitle} onChange={e => setDraft({ title: e.target.value })} /></label>
-              <label>时间<select value={draft.time} onChange={e => setDraft({ time: e.target.value })}><option value="">请选择</option>{["今天", "最近一年", "小时候", "很久以前", "不确定"].map(x => <option key={x}>{x}</option>)}</select></label>
+              {/* 四个 label 都统一用 .field-name 包住标题文字，标签行等高，控件才会对齐 */}
+              <label><span className="field-name">{t.storyTitle}</span><input value={draft.title || state.analysis.suggestedTitle} onChange={e => setDraft({ title: e.target.value })} /></label>
+              <label><span className="field-name">时间</span><select value={draft.time} onChange={e => setDraft({ time: e.target.value })}><option value="">请选择</option>{["今天", "最近一年", "小时候", "很久以前", "不确定"].map(x => <option key={x}>{x}</option>)}</select></label>
               <CityField draft={draft} setDraft={setDraft} label="地点" />
-              <label>人生阶段<select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">请选择</option>{["童年", "中学", "大学", "青年探索", "初入职场", "成年回望"].map(x => <option key={x}>{x}</option>)}</select></label>
+              <label><span className="field-name">人生阶段</span><select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">请选择</option>{["童年", "中学", "大学", "青年探索", "初入职场", "成年回望"].map(x => <option key={x}>{x}</option>)}</select></label>
             </div>
             <article className="story-preview editable-preview"><div className="preview-head"><h2>{draft.title || state.analysis.suggestedTitle}</h2><button onClick={() => setEditingBody(!editingBody)}>{editingBody ? t.doneEdit : t.editBody}</button></div>{editingBody ? <textarea value={draft.body} onChange={e => setDraft({ body: e.target.value, edits: draft.edits + 1 })} /> : <p>{draft.body}</p>}</article>
           </div>
