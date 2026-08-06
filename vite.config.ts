@@ -25,7 +25,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
     plugins: [react(), imageApiPlugin(env)],
-    base: env.VITE_BASE_PATH || "/StoryVerse/",
-    server: { host: "127.0.0.1", port: 4173 },
+    base: env.VITE_BASE_PATH || "/",
+    server: {
+      host: "127.0.0.1",
+      port: 4173,
+      proxy: { "/api/v1": { target: "http://127.0.0.1:3000", changeOrigin: false } },
+    },
   };
 });

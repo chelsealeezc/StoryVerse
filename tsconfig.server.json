@@ -4,12 +4,12 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "server/dist",
-    "rootDir": "server",
+    "rootDir": ".",
     "strict": true,
     "skipLibCheck": true,
     "noEmit": false,
     "types": ["node"]
   },
-  "include": ["server/**/*.ts"],
+  "include": ["server/**/*.ts", "drizzle.config.ts"],
   "exclude": ["server/dist"]
 }
