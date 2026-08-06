@@ -32,6 +32,8 @@ export interface Draft {
   time: string;
   stage: string;
   age: string;
+  /** "男" | "女" | "其他" | ""（未填）。会传给生图接口，影响画面里的人物呈现。 */
+  gender: string;
   city: string;
   cityEn: string;
   cityCountry: string;

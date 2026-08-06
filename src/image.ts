@@ -40,6 +40,7 @@ export async function generateStoryImage(
       mood: draft.mood,
       time: draft.time,
       stage: draft.stage,
+      gender: draft.gender,
       people: draft.people,
       tags,
     }),

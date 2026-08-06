@@ -16,6 +16,11 @@ export interface TourStep {
   placement?: Placement;
   /** 高亮框的额外内边距，默认 8px。 */
   pad?: number;
+  /**
+   * 允许用户真的点到被高亮的控件（默认整层拦住点击，只能靠按钮推进）。
+   * 语言切换那一步必须开着，否则看不懂中文的人被卡在第一步。
+   */
+  interactive?: boolean;
   zh: { title: string; body: string };
   en: { title: string; body: string };
 }
@@ -33,6 +38,24 @@ const scenes: Record<TourSceneId, TourScene> = {
     id: "lobby",
     finishLabel: { zh: "去写第一个故事 →", en: "Write my first story →" },
     steps: [
+      /*
+       * 第一步必须是语言，而且两种语言的文案都要写在同一张卡上 ——
+       * 读不懂中文的人，正是最需要看懂这一步的人。这一步也是 interactive 的，
+       * 用户要能真的按到那个按钮。
+       */
+      {
+        target: "[data-tour='lang-button']",
+        placement: "bottom",
+        interactive: true,
+        zh: {
+          title: "先选语言 · Choose your language",
+          body: "点右上角这个按钮，可以在 中文 和 English 之间切换。整个引导会跟着一起换。\n\nTap the button up here to switch between 中文 and English. This tour follows your choice.\n\n选好了就继续 · Continue when you're set.",
+        },
+        en: {
+          title: "Choose your language · 先选语言",
+          body: "Tap the button up here to switch between English and 中文. The whole tour follows your choice.\n\n点右上角这个按钮，可以在 English 和 中文 之间切换，整个引导会跟着一起换。\n\nContinue when you're set · 选好了就继续。",
+        },
+      },
       {
         placement: "center",
         zh: {
@@ -60,12 +83,12 @@ const scenes: Record<TourSceneId, TourScene> = {
         target: "[data-tour='top-controls']",
         placement: "bottom",
         zh: {
-          title: "随手可调的三件事",
-          body: "换主题（白天 / 夜晚）、切中英文、还有搜索 —— 想找特定的故事时用得上。",
+          title: "旁边还有两个",
+          body: "左边那颗月亮切白天 / 夜晚主题，右边的放大镜用来搜索特定的故事。",
         },
         en: {
-          title: "Three things you can tweak",
-          body: "Switch theme (day / night), switch language, and search — handy when you're looking for something specific.",
+          title: "Two more up here",
+          body: "The moon on the left flips between day and night themes; the magnifier on the right searches for specific stories.",
         },
       },
       {

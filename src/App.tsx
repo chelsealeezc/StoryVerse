@@ -113,6 +113,8 @@ const copy = {
     yourStory: "你的故事", count: "建议 100–1500 字", gentleTip: "这段记忆已经有了开头。再多写一点细节，AI 会更容易理解它。",
     restTip: "需要休息一下吗？你的草稿已自动保存。", mood: "写完后的感受", occurred: "故事发生在", city: "城市",
     lifeStage: "当时的人生阶段", people: "故事里有谁？", multi: "可多选", prev: "上一步", ai: "故事写好了",
+    gender: "性别", genderPick: "请选择", genderMale: "男", genderFemale: "女", genderOther: "其他",
+    genderOtherHint: "选择「其他」时，AI生图可能无法准确呈现人物形象哦。", genderOtherNote: "只是建议，可以忽略",
     pasteTitle: "这是你以前写的内容吗？可以选择其他输入方式哦。", pasteYes: "是", pasteOther: "尝试别的输入方式",
     leaveTitle: "你的故事尚未完成，是否保存草稿？", saveDraft: "保存草稿", leaveAnyway: "直接离开", keepWriting: "继续写",
     finalSay: "你的故事页面", confirmTitle: "确认后，它会成为 StoryVerse 里的一颗星。", storyTitle: "故事标题", editBody: "修改正文", doneEdit: "完成修改",
@@ -136,6 +138,8 @@ const copy = {
     yourStory: "Your story", count: "Suggested 100-1500 words", gentleTip: "This memory has a beginning. Add a few details so AI can understand it better.",
     restTip: "Need a pause? Your draft has been saved.", mood: "How you feel after writing", occurred: "When it happened", city: "City",
     lifeStage: "Life stage then", people: "Who is in the story?", multi: "Multiple", prev: "Previous", ai: "Let AI organize",
+    gender: "Gender", genderPick: "Please choose", genderMale: "Male", genderFemale: "Female", genderOther: "Other",
+    genderOtherHint: "With “Other”, the AI may not portray the character accurately in the generated image.", genderOtherNote: "Just a suggestion — feel free to ignore",
     pasteTitle: "Is this something you wrote before? You can choose another input method.", pasteYes: "Yes", pasteOther: "Try another input method",
     leaveTitle: "Your story is not finished. Save it as a draft?", saveDraft: "Save draft", leaveAnyway: "Leave anyway", keepWriting: "Keep writing",
     finalSay: "Step 4 · The final say is yours", confirmTitle: "Confirm your story star.", storyTitle: "Story title", editBody: "Edit body", doneEdit: "Done editing",
@@ -644,6 +648,34 @@ function CityField({ draft, setDraft, label }: { draft: Draft; setDraft: (patch:
   );
 }
 
+/**
+ * 性别选择。第二步和第四步共用同一个组件，选项文案跟随语言，
+ * 但存进 draft 的值固定是中文（男 / 女 / 其他），这样切换语言不会把已选的值弄丢，
+ * 传给生图接口的取值也保持稳定。
+ */
+const GENDER_KEYS = [
+  { value: "男", label: "genderMale" },
+  { value: "女", label: "genderFemale" },
+  { value: "其他", label: "genderOther" },
+] as const;
+
+function GenderField({ draft, setDraft, t, wide }: {
+  draft: Draft;
+  setDraft: (patch: Partial<Draft>) => void;
+  t: typeof copy["zh"] | typeof copy["en"];
+  wide?: boolean;
+}) {
+  return (
+    <label className={wide ? "field-wide" : undefined}>
+      <span className="field-name">{t.gender} <small>{t.optional}</small></span>
+      <select value={draft.gender} onChange={event => setDraft({ gender: event.target.value })}>
+        <option value="">{t.genderPick}</option>
+        {GENDER_KEYS.map(option => <option key={option.value} value={option.value}>{t[option.label]}</option>)}
+      </select>
+    </label>
+  );
+}
+
 function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChange, tourActive, onTourFinish, onTourSkip }: {
   state: AppState; update: AppUpdate; onPublished: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void;
 } & TourProps) {
@@ -881,8 +913,10 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
                     <span>岁</span>
                   </div>
                 </label>
+                <GenderField draft={draft} setDraft={setDraft} t={t} />
                 {(draft.time === "小时候" || draft.time === "很久以前") && <label className="field-wide"><span className="field-name">{t.lifeStage}</span><select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">请选择</option>{["童年", "中学", "大学", "青年探索", "初入职场", "成年回望"].map(x => <option key={x}>{x}</option>)}</select></label>}
               </div>
+              {draft.gender === "其他" && <p className="gender-hint">{t.genderOtherHint}<small>{t.genderOtherNote}</small></p>}
               {(showCityHint || showAgeHint) && (
                 <div className="ai-hint">
                   <Sparkles size={15} /><span>AI 从你的文字里读到：</span>
@@ -948,7 +982,9 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
               <label><span className="field-name">时间</span><select value={draft.time} onChange={e => setDraft({ time: e.target.value })}><option value="">请选择</option>{["今天", "最近一年", "小时候", "很久以前", "不确定"].map(x => <option key={x}>{x}</option>)}</select></label>
               <CityField draft={draft} setDraft={setDraft} label="地点" />
               <label><span className="field-name">人生阶段</span><select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">请选择</option>{["童年", "中学", "大学", "青年探索", "初入职场", "成年回望"].map(x => <option key={x}>{x}</option>)}</select></label>
+              <GenderField draft={draft} setDraft={setDraft} t={t} wide />
             </div>
+            {draft.gender === "其他" && <p className="gender-hint">{t.genderOtherHint}<small>{t.genderOtherNote}</small></p>}
             <article className="story-preview editable-preview"><div className="preview-head"><h2>{draft.title || state.analysis.suggestedTitle}</h2><button onClick={() => setEditingBody(!editingBody)}>{editingBody ? t.doneEdit : t.editBody}</button></div>{editingBody ? <textarea value={draft.body} onChange={e => setDraft({ body: e.target.value, edits: draft.edits + 1 })} /> : <p>{draft.body}</p>}</article>
           </div>
           <div className="tag-editor">
@@ -1273,9 +1309,23 @@ export default function App() {
       language={state.language}
       onLanguageChange={language => update({ language })}
       onHome={goHome}
-      /* 引导要求「先认识星空大厅，最后才介绍写故事按钮」，所以引导还开着时注册完
-         先落在大厅，由引导最后一步把人送进写作流程；引导关掉后恢复原行为。 */
-      onComplete={() => update({ onboarded: true, accountCreated: true, screen: state.firstStoryComplete || state.tour.enabled ? "atlas" : "wizard" })}
+      /*
+       * 「注册」本身就是「第一次来」的信号，所以注册成功时把引导重新武装一次。
+       * 不这么做的话，浏览器里残留的 tour.enabled=false（上一次看完或跳过留下的）
+       * 会让新注册的人完全看不到引导 —— 这正是实际踩到的坑。登录不重置。
+       *
+       * 引导要求「先认识星空大厅，最后才介绍写故事按钮」，所以引导开着时注册完
+       * 先落在大厅，由引导最后一步把人送进写作流程；引导关掉后恢复原行为。
+       */
+      onComplete={() => update(previous => {
+        const tour = authMode === "signup" ? { enabled: true, seen: [] } : previous.tour;
+        return {
+          onboarded: true,
+          accountCreated: true,
+          tour,
+          screen: previous.firstStoryComplete || tour.enabled ? "atlas" : "wizard",
+        };
+      })}
       section={gatewaySection}
       authMode={authMode}
       onAuthModeChange={setAuthMode}

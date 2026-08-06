@@ -55,7 +55,7 @@ export const stories: Story[] = [
 ];
 
 export const emptyDraft: Draft = {
-  guide: "", customGuide: "", title: "", body: "", mood: "", time: "", stage: "", age: "",
+  guide: "", customGuide: "", title: "", body: "", mood: "", time: "", stage: "", age: "", gender: "",
   city: "", cityEn: "", cityCountry: "", cityLat: null, cityLon: null, people: [],
   startedAt: Date.now(), edits: 0, pastedChars: 0, saves: 0, savedAt: 0,
 };

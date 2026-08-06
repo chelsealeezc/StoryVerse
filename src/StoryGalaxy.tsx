@@ -721,7 +721,7 @@ export function StoryGalaxy({
           <button className="neon-control theme-button" aria-label={t.theme} onClick={() => onThemeModeChange(themeMode === "night" ? "day" : "night")}>
             <Icon name={themeMode === "night" ? "sun" : "moon"} size={20} />
           </button>
-          <button className="neon-control lang-button" aria-label={t.language} onClick={() => onLanguageChange(language === "zh" ? "en" : "zh")}>
+          <button className="neon-control lang-button" data-tour="lang-button" aria-label={t.language} onClick={() => onLanguageChange(language === "zh" ? "en" : "zh")}>
             <span className={language === "zh" ? "lang-primary" : "lang-secondary"}>中文</span>
             <span className="lang-divider" />
             <span className={language === "en" ? "lang-primary" : "lang-secondary"}>ENG</span>

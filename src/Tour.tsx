@@ -155,7 +155,12 @@ export function Tour({
   const finishLabel = config.finishLabel ? config.finishLabel[language] : ui.done;
 
   return (
-    <div className="tour-layer" role="dialog" aria-modal="true" aria-label={copy.title}>
+    <div
+      className={`tour-layer ${step.interactive ? "is-interactive" : ""}`}
+      role="dialog"
+      aria-modal={step.interactive ? undefined : true}
+      aria-label={copy.title}
+    >
       {rect && !centered ? (
         <div
           className="tour-spotlight"

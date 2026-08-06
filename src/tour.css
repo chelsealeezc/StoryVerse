@@ -7,6 +7,14 @@
   animation: tour-fade .28s ease;
 }
 
+/*
+ * interactive 步骤：整层不吃点击，让用户能真的按到被高亮的控件
+ * （高亮的压暗效果来自 box-shadow，本来就不拦事件）。卡片自己要收回点击能力，
+ * 否则「下一步 / 跳过」也按不动了。
+ */
+.tour-layer.is-interactive { pointer-events: none; }
+.tour-layer.is-interactive .tour-card { pointer-events: auto; }
+
 @keyframes tour-fade { from { opacity: 0 } }
 
 /* 没有高亮目标时的整屏压暗 */
