@@ -271,15 +271,27 @@ const scenes: Record<TourSceneId, TourScene> = {
         },
       },
       {
+        target: ".image-style-picker",
+        placement: "left",
+        zh: {
+          title: "先挑一种画风",
+          body: "卡通蜡笔、简约写实、复古拼贴 —— 三种都可以试。\n\n鼠标悬停就能看示意图。换风格会清掉已生成的图，重新画一张。",
+        },
+        en: {
+          title: "Pick a look first",
+          body: "Crayon cartoon, minimal realistic, or retro collage — all fair game.\n\nHover to preview each one. Switching styles clears the current image and redraws.",
+        },
+      },
+      {
         target: ".comic-preview",
         placement: "left",
         zh: {
-          title: "把故事画成四格漫画",
-          body: "可选的小彩蛋：AI 会把你的故事拆成起因、发展、转折、结局四张画面，可以下载。\n\n生成需要一两分钟，不喜欢可以重来。",
+          title: "把故事画成一张图",
+          body: "可选的小彩蛋：AI 会先从你的故事里挑出一个「高光时刻」，再按你选的风格画成一张图，可以下载。\n\n生成要等一会儿，不喜欢可以重来。展开还能看它到底选中了哪一段。",
         },
         en: {
-          title: "Turn it into a four-panel comic",
-          body: "An optional treat: the AI breaks your story into four frames — setup, build, turn, ending — and you can download it.\n\nTakes a minute or two, and you can always regenerate.",
+          title: "Turn it into a picture",
+          body: "An optional treat: the AI picks one “highlight moment” from your story and paints it in the style you chose. Downloadable.\n\nTakes a moment, and you can regenerate. Expand it to see which moment it picked.",
         },
       },
       {
