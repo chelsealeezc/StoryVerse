@@ -30,11 +30,15 @@ export async function verifyPassword(hash: string, password: string) {
 }
 
 export function setSessionCookie(reply: FastifyReply, token: string) {
+  const isProduction = process.env.NODE_ENV === "production";
   reply.setCookie(SESSION_COOKIE, token, {
     path: "/",
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: isProduction,
+    // GitHub Pages and the Aliyun API gateway are different sites. Production
+    // therefore needs an explicitly cross-site cookie; local development keeps
+    // the safer Lax default and does not require HTTPS.
+    sameSite: isProduction ? "none" : "lax",
     maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
 }

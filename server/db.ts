@@ -6,6 +6,7 @@ const { Pool } = pg;
 
 function sslConfig(url: string) {
   if (!url || /localhost|127\.0\.0\.1/.test(url)) return undefined;
+  if (process.env.DATABASE_SSL === "false") return false;
   return { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" };
 }
 
