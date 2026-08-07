@@ -36,26 +36,8 @@ const scenes: Record<TourSceneId, TourScene> = {
   /* ── 1. 星空大厅 ───────────────────────────────────────────── */
   lobby: {
     id: "lobby",
-    finishLabel: { zh: "去写第一个故事 →", en: "Write my first story →" },
+    finishLabel: { zh: "开始逛逛 ✦", en: "Start exploring ✦" },
     steps: [
-      /*
-       * 第一步必须是语言，而且两种语言的文案都要写在同一张卡上 ——
-       * 读不懂中文的人，正是最需要看懂这一步的人。这一步也是 interactive 的，
-       * 用户要能真的按到那个按钮。
-       */
-      {
-        target: "[data-tour='lang-button']",
-        placement: "bottom",
-        interactive: true,
-        zh: {
-          title: "先选语言 · Choose your language",
-          body: "点右上角这个按钮，可以在 中文 和 English 之间切换。整个引导会跟着一起换。\n\nTap the button up here to switch between 中文 and English. This tour follows your choice.\n\n选好了就继续 · Continue when you're set.",
-        },
-        en: {
-          title: "Choose your language · 先选语言",
-          body: "Tap the button up here to switch between English and 中文. The whole tour follows your choice.\n\n点右上角这个按钮，可以在 English 和 中文 之间切换，整个引导会跟着一起换。\n\nContinue when you're set · 选好了就继续。",
-        },
-      },
       {
         placement: "center",
         zh: {
@@ -106,13 +88,16 @@ const scenes: Record<TourSceneId, TourScene> = {
       {
         target: "[data-tour='nav-resonance']",
         placement: "top",
+        interactive: true,
+        // 文案要短：点开后「调整属性」浮窗停在屏幕正中，卡片一高就会压住它，
+        // 用户反而看不到自己点出来的东西。压到两行以内正好落在浮窗下方。
         zh: {
-          title: "调整属性",
-          body: "决定你想看到什么样的故事：跟你相近的，还是完全不同的。\n\n可以按城市、人生阶段、主题分别设定，随时能改。",
+          title: "调整属性 —— 点开看看",
+          body: "按城市、人生阶段、主题，决定你想看到相近还是不同的故事。",
         },
         en: {
-          title: "Resonance",
-          body: "Decide what kind of stories reach you: ones close to yours, or ones nothing like it.\n\nSet it by city, life stage and theme — changeable anytime.",
+          title: "Resonance — open it",
+          body: "By city, life stage and theme: stories close to yours, or nothing like it.",
         },
       },
       {
@@ -125,12 +110,24 @@ const scenes: Record<TourSceneId, TourScene> = {
         target: "[data-tour='nav-write']",
         placement: "top",
         zh: {
-          title: "写下新故事 ✦",
-          body: "重点来了。这颗「＋」是你的入口。\n\n不需要文采，不需要完整 —— 只要是真的。准备好了吗？",
+          title: "还想再写一个？",
+          body: "这颗「＋」随时在。想到什么就回来写，不用等到「值得记录」的那天。",
         },
         en: {
-          title: "Write a new story ✦",
-          body: "Here's the important one. That “+” is your way in.\n\nNo craft required, no need to be complete — just true. Ready?",
+          title: "Want to write another?",
+          body: "That “+” is always here. Come back whenever something surfaces — no need to wait for a story that feels “worth it”.",
+        },
+      },
+      {
+        target: "[data-tour='account-dock']",
+        placement: "right",
+        zh: {
+          title: "消息与账户",
+          body: "故事被处理、被下架，或者审核有结果，都会出现在这里的收件箱。\n\n引导到这里就结束啦 —— 星空是你的了 🎉",
+        },
+        en: {
+          title: "Messages & account",
+          body: "If a story of yours gets reviewed or taken down, the notice lands in the inbox here.\n\nThat's the end of the tour — the sky is yours 🎉",
         },
       },
     ],
@@ -141,47 +138,47 @@ const scenes: Record<TourSceneId, TourScene> = {
     id: "guide",
     finishLabel: { zh: "我挑一个", en: "Let me pick one" },
     steps: [
+      /*
+       * 语言放在整条引导的最开头，而且两种语言的文案写在同一张卡上 ——
+       * 读不懂中文的人，正是最需要看懂这一步的人。interactive 让用户真的按得到按钮。
+       */
       {
-        placement: "center",
+        target: ".app-lang-button",
+        placement: "bottom",
+        interactive: true,
         zh: {
-          title: "第一步：先找个入口",
-          body: "空白页最难写。所以我们不从空白开始 —— 先挑一个「切口」，让记忆有地方落脚。",
+          title: "先选语言 · Choose your language",
+          body: "点右上角这个按钮，可以在 中文 和 English 之间切换。整个引导会跟着一起换。\n\nTap the button up here to switch between 中文 and English. This tour follows your choice.\n\n选好了就继续 · Continue when you're set.",
         },
         en: {
-          title: "Step one: find a way in",
-          body: "Blank pages are the hardest. So we don't start blank — pick a doorway first, and let the memory have somewhere to land.",
+          title: "Choose your language · 先选语言",
+          body: "Tap the button up here to switch between English and 中文. The whole tour follows your choice.\n\n点右上角这个按钮，可以在 English 和 中文 之间切换，整个引导会跟着一起换。\n\nContinue when you're set · 选好了就继续。",
         },
       },
       {
         target: ".guide-panels",
         placement: "bottom",
+        interactive: true,
         zh: {
-          title: "五种入口，点开看看",
-          body: "身份、生命阶段、观念转变、重大经历 —— 每一栏都是一个提问。\n\n点哪一栏，它就展开成你这次写作的提示。",
+          title: "第一步：先找个入口",
+          body: "空白页最难写。所以我们不从空白开始 —— 先挑一个「切口」，让记忆有地方落脚。\n\n① 人生转折 —— 改变你人生方向的时刻\n② 生命阶段 —— 最能代表某一段日子的故事\n③ 观念转变 —— 改变你看待自己或世界的瞬间\n④ 重大经历 —— 至今仍留在你心里的事\n⑤ 其他 —— 都不合适？这张自己写\n\n现在可以直接点开看看，随便翻。",
         },
         en: {
-          title: "Five doorways — open one",
-          body: "Identity, life stages, shifts in perspective, defining experiences — each panel is a question.\n\nClick one and it expands into the prompt you'll write from.",
-        },
-      },
-      {
-        target: ".guide-panels .guide-panel:last-child",
-        placement: "left",
-        pad: 4,
-        zh: {
-          title: "都不合适？",
-          body: "最后一栏是「其他」—— 你可以自己写下想讲的那种时刻。没有标准答案，这本来就是你的故事。",
-        },
-        en: {
-          title: "None of them fit?",
-          body: "The last panel is “Something Else” — write your own doorway. There's no right answer here; it's your story to begin with.",
+          title: "Step one: find a way in",
+          body: "Blank pages are the hardest. So we don't start blank — pick a doorway and let the memory have somewhere to land.\n\n① Turning Points — a moment that changed your direction\n② Life Stages — the story that captures one chapter\n③ Perspective Shifts — when you started seeing differently\n④ Major Experiences — what's still with you\n⑤ Something Else — none fit? write your own\n\nGo ahead and open them — click around.",
         },
       },
       {
         target: ".stack-actions",
         placement: "top",
-        zh: { title: "选好就继续", body: "下面这条会一直告诉你当前选了哪个入口。选定之后，点右边继续。" },
-        en: { title: "Then continue", body: "This bar always shows which doorway you're on. Once you've chosen, continue on the right." },
+        zh: {
+          title: "选好就继续",
+          body: "五张都看过了。挑一张你真正想写的 —— 点卡片就能换，下面这条会告诉你当前选的是哪个。",
+        },
+        en: {
+          title: "Then continue",
+          body: "That's all five. Pick the one you actually want to write — click any card to switch; this bar always shows where you are.",
+        },
       },
     ],
   },
@@ -200,54 +197,6 @@ const scenes: Record<TourSceneId, TourScene> = {
         en: {
           title: "Alright — let's write one ✎",
           body: "No word count. No format. Nobody's grading this.\n\nWander if you want to. This was never an essay class.",
-        },
-      },
-      {
-        target: ".prompt-panel",
-        placement: "right",
-        zh: {
-          title: "你的提示一直在这",
-          body: "刚才选的入口会留在左边陪着你。写不下去的时候抬头看一眼。\n\n想换一个？点上面的返回箭头。",
-        },
-        en: {
-          title: "Your prompt stays here",
-          body: "The doorway you picked sits on the left, keeping you company. Glance up when you get stuck.\n\nWant a different one? Use the back arrow above.",
-        },
-      },
-      {
-        target: ".story-input-tools",
-        placement: "bottom",
-        zh: {
-          title: "专注模式",
-          body: "打开它，左边的面板和下面的选项都会收起来，只剩你和文字。\n\n填过的内容不会丢，按 Esc 就能退出。",
-        },
-        en: {
-          title: "Focus mode",
-          body: "Turn it on and the side panel and the fields below fold away — just you and the words.\n\nNothing you've filled in is lost. Esc brings it back.",
-        },
-      },
-      {
-        target: ".story-form textarea",
-        placement: "top",
-        zh: {
-          title: "正文写在这里",
-          body: "建议 100–1500 字，但那只是建议。\n\n草稿每隔几秒会自动存在这台设备上，不用担心写着写着没了。",
-        },
-        en: {
-          title: "The story goes here",
-          body: "100–1500 words is suggested — emphasis on suggested.\n\nYour draft autosaves to this device every few seconds, so it won't vanish on you.",
-        },
-      },
-      {
-        target: ".meta-fields",
-        placement: "top",
-        zh: {
-          title: "给故事一点坐标",
-          body: "心情、时间、城市、年龄、故事里有谁 —— 这些决定了你的星星落在星空的哪个位置。\n\n城市支持海内外；填了就能解析出经纬度。",
-        },
-        en: {
-          title: "Give the story coordinates",
-          body: "Mood, when, where, your age, who was there — these decide where your star lands in the sky.\n\nCities worldwide work; we'll resolve the coordinates for you.",
         },
       },
     ],
@@ -272,14 +221,14 @@ const scenes: Record<TourSceneId, TourScene> = {
       {
         target: ".compact-edit-grid",
         placement: "bottom",
-        zh: { title: "信息可以改", body: "标题、时间、地点、人生阶段 —— 觉得 AI 读错了，直接在这里改掉。" },
-        en: { title: "Fix the details", body: "Title, time, place, life stage — if the AI misread something, just correct it here." },
-      },
-      {
-        target: ".editable-preview",
-        placement: "right",
-        zh: { title: "正文也可以改", body: "点「修改正文」就能回到编辑状态。想再补一段、想删掉一句，都行。" },
-        en: { title: "And the story itself", body: "Hit “Edit” to go back in. Add a paragraph, cut a line — whatever it needs." },
+        zh: {
+          title: "信息可以改，正文也可以改",
+          body: "标题、时间、地点、人生阶段、性别 —— 觉得 AI 读错了，直接在这里改掉。\n\n正文也一样：点下面的「修改正文」就能回到编辑状态，补一段、删一句都行。",
+        },
+        en: {
+          title: "Fix the details — and the story",
+          body: "Title, time, place, life stage, gender — if the AI misread something, correct it right here.\n\nSame for the story itself: hit \"Edit\" below to go back in and add a paragraph or cut a line.",
+        },
       },
       {
         target: ".tag-editor-head",
@@ -375,6 +324,7 @@ export function getScene(id: TourSceneId): TourScene {
 }
 
 export const tourUi = {
-  zh: { skip: "跳过引导", next: "下一步", back: "上一步", done: "完成", of: "/" },
-  en: { skip: "Skip tour", next: "Next", back: "Back", done: "Done", of: "/" },
+  // 「跳过」只跳过当前这一页，后面的页面照常有引导
+  zh: { skip: "跳过本页", next: "下一步", back: "上一步", done: "完成", of: "/" },
+  en: { skip: "Skip this page", next: "Next", back: "Back", done: "Done", of: "/" },
 };

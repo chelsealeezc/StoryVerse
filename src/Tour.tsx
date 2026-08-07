@@ -24,7 +24,8 @@ export function Tour({
   scene: TourSceneId;
   language: "zh" | "en";
   onFinish: (scene: TourSceneId) => void;
-  onSkip: () => void;
+  /** 只跳过当前场景，后面的页面照常播放 —— 所以要把 scene 传回去 */
+  onSkip: (scene: TourSceneId) => void;
 }) {
   const config = getScene(scene);
   const ui = tourUi[language];
@@ -110,13 +111,13 @@ export function Tour({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onSkip(); }
+      if (event.key === "Escape") { event.preventDefault(); onSkip(scene); }
       else if (event.key === "ArrowRight" || event.key === "Enter") { event.preventDefault(); next(); }
       else if (event.key === "ArrowLeft") { event.preventDefault(); back(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, back, onSkip]);
+  }, [next, back, onSkip, scene]);
 
   if (!step) return null;
 
@@ -173,7 +174,7 @@ export function Tour({
       <div className="tour-card" ref={cardRef} style={cardStyle}>
         <div className="tour-card-head">
           <span className="tour-count">{index + 1} {ui.of} {config.steps.length}</span>
-          <button className="tour-skip" onClick={onSkip}>{ui.skip}</button>
+          <button className="tour-skip" onClick={() => onSkip(scene)}>{ui.skip}</button>
         </div>
         <h3>{copy.title}</h3>
         {copy.body.split("\n\n").map((para, i) => (

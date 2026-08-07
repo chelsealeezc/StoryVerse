@@ -1,0 +1,310 @@
+/*
+ * 管理端。布局参考「极速达」demo 的指标卡 + 列表 + 详情，
+ * 但配色沿用 StoryVerse 自己的白天 / 深夜两套主题，不照搬那份深色仪表盘。
+ */
+
+/* ── 管理员登录 ─────────────────────────────────────────────── */
+/*
+ * 白天是天空 + 云，夜晚是宇宙。云用几团半透明的径向渐变堆出来，
+ * 不额外加图片资源；夜晚复用星图那张宇宙底图，和主站保持一致。
+ */
+.admin-sky {
+  background:
+    radial-gradient(circle at 18% 78%, rgba(255,255,255,.95), rgba(255,255,255,0) 26%),
+    radial-gradient(circle at 30% 84%, rgba(255,255,255,.9), rgba(255,255,255,0) 20%),
+    radial-gradient(circle at 74% 26%, rgba(255,255,255,.92), rgba(255,255,255,0) 24%),
+    radial-gradient(circle at 86% 36%, rgba(255,255,255,.85), rgba(255,255,255,0) 18%),
+    radial-gradient(circle at 52% 12%, rgba(255,255,255,.8), rgba(255,255,255,0) 22%),
+    linear-gradient(180deg, #8ecbf0 0%, #bfe4f6 38%, #e6f4fb 72%, #f7fbfd 100%);
+}
+
+.admin-universe {
+  background:
+    radial-gradient(circle at 18% 14%, rgba(120,221,235,.16), transparent 32%),
+    radial-gradient(circle at 82% 22%, rgba(168,140,244,.15), transparent 30%),
+    url("./assets/storyverse-night-bg.png") center / cover fixed no-repeat,
+    #04080d;
+}
+
+.admin-gate {
+  min-height: 100vh; display: grid; place-items: center; padding: 24px;
+  font-family: "PingFang SC", "Noto Sans SC", Inter, -apple-system, "Segoe UI", sans-serif;
+}
+.admin-gate-card {
+  width: min(430px, 100%); display: grid; gap: 12px; padding: 32px 30px 26px;
+  border: 1px solid rgba(6,109,168,.14); border-radius: 26px; background: rgba(255,255,255,.9);
+  box-shadow: 0 30px 80px rgba(6,109,168,.12);
+}
+.admin-gate-back {
+  justify-self: start; padding: 0; border: 0; background: transparent; cursor: pointer;
+  color: #6a8496; font-size: 12px; font-weight: 600;
+}
+.admin-gate-back:hover { color: #12aeea; }
+.admin-gate-card h1 { margin: 10px 0 0; font-size: 28px; font-weight: 600; letter-spacing: -.03em; color: #0b2d42; }
+.admin-gate-card > p { margin: 0 0 6px; color: #557084; font-size: 13px; line-height: 1.7; }
+.admin-gate-card label { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: #0b2d42; }
+.admin-gate-card input {
+  height: 46px; padding: 0 14px; font: inherit; font-size: 14px;
+  border: 1px solid rgba(6,109,168,.2); border-radius: 13px; background: #fff; color: #0b2d42;
+}
+.admin-gate-error { color: #c0392b; font-size: 12px; font-style: normal; }
+.admin-gate-submit {
+  height: 48px; margin-top: 6px; border: 0; border-radius: 999px; cursor: pointer;
+  background: #12aeea; color: #fff; font-size: 14px; font-weight: 700;
+}
+.admin-gate-demo { margin: 4px 0 0; color: #8fa5b3; font-size: 11px; line-height: 1.6; }
+.admin-gate-card { position: relative; }
+.admin-gate-theme {
+  position: absolute; top: 16px; right: 18px;
+  width: 32px; height: 32px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid rgba(6,109,168,.18); border-radius: 50%; background: rgba(255,255,255,.7); font-size: 14px;
+}
+
+/* 夜晚：卡片跟着变深，压在宇宙底图上才不刺眼 */
+.admin-gate.theme-night .admin-gate-card {
+  border-color: rgba(255,255,255,.14);
+  background: rgba(10,18,26,.82);
+  box-shadow: 0 30px 90px rgba(0,0,0,.5);
+  backdrop-filter: blur(18px);
+}
+.admin-gate.theme-night .admin-gate-card h1 { color: #f2f6fa; }
+.admin-gate.theme-night .admin-gate-card > p { color: #9fb4c2; }
+.admin-gate.theme-night .admin-gate-card label { color: #dceaf3; }
+.admin-gate.theme-night .admin-gate-card input {
+  border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.07); color: #f2f6fa;
+}
+.admin-gate.theme-night .admin-gate-back { color: #9fb4c2; }
+.admin-gate.theme-night .admin-gate-theme {
+  border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: #f2f6fa;
+}
+
+/* 卡片在天空 / 宇宙上都要浮起来，稍微加点毛玻璃 */
+.admin-header, .admin-stat, .admin-row, .admin-detail {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.admin-page {
+  min-height: 100vh;
+  padding-bottom: 60px;
+  color: #241a12;
+  font-family: "PingFang SC", "Noto Sans SC", Inter, -apple-system, "Segoe UI", sans-serif;
+}
+
+.admin-page.theme-night { color: #f2f6fa; }
+
+.admin-header {
+  height: 72px;
+  padding: 0 clamp(16px, 4vw, 40px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(6,109,168,.12);
+  background: rgba(255,255,255,.72);
+  backdrop-filter: blur(18px);
+}
+
+.theme-night .admin-header { border-bottom-color: rgba(255,255,255,.1); background: rgba(4,10,16,.72); }
+
+.admin-brand { display: flex; align-items: center; gap: 12px; }
+.admin-logo { font-size: 22px; letter-spacing: -.03em; }
+.admin-logo b { font-family: "Mr Dafoe Regular", cursive; font-weight: 400; font-size: 30px; }
+.admin-badge {
+  padding: 4px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .12em;
+  background: #12aeea; color: #fff;
+}
+
+.admin-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-ghost {
+  height: 36px; padding: 0 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
+  border: 1px solid rgba(6,109,168,.2); background: rgba(255,255,255,.8); color: #063d5d;
+  transition: border-color .18s ease, background .18s ease;
+}
+.admin-ghost:hover { border-color: #12aeea; }
+.admin-ghost.danger { color: #b3402c; border-color: rgba(179,64,44,.28); }
+.theme-night .admin-ghost { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #dceaf3; }
+.theme-night .admin-ghost.danger { color: #ff9f8a; border-color: rgba(255,159,138,.3); }
+
+.admin-intro { padding: 30px clamp(16px, 4vw, 40px) 4px; }
+.admin-intro h1 { margin: 0; font-size: clamp(28px, 3.2vw, 40px); font-weight: 600; letter-spacing: -.04em; }
+.admin-intro p { margin: 8px 0 0; color: #557084; font-size: 14px; }
+.theme-night .admin-intro p { color: #93a8b6; }
+
+/* 指标卡：点一下就是筛选 */
+.admin-stats {
+  padding: 22px clamp(16px, 4vw, 40px) 0;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
+}
+.admin-stat {
+  display: grid; gap: 3px; padding: 16px 18px; text-align: left; cursor: pointer;
+  border: 1px solid rgba(6,109,168,.14); border-radius: 18px; background: rgba(255,255,255,.76);
+  box-shadow: 0 16px 44px rgba(6,109,168,.07);
+  transition: transform .16s ease, border-color .18s ease;
+}
+.admin-stat:hover { transform: translateY(-2px); }
+.admin-stat.is-active { border-color: #12aeea; box-shadow: 0 0 0 2px rgba(18,174,234,.18), 0 16px 44px rgba(6,109,168,.1); }
+.admin-stat b { font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
+.admin-stat span { font-size: 13px; font-weight: 600; }
+.admin-stat small { color: #7d93a3; font-size: 11px; }
+.theme-night .admin-stat { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.05); box-shadow: none; }
+.theme-night .admin-stat small { color: #8ea3b1; }
+
+.admin-stat.bucket-reported b { color: #d4622f; }
+.admin-stat.bucket-uncertain b { color: #c08a1e; }
+.admin-stat.bucket-appealed b { color: #12aeea; }
+
+.admin-body {
+  padding: 20px clamp(16px, 4vw, 40px) 0;
+  display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 16px; align-items: start;
+}
+
+.admin-list { display: grid; gap: 10px; }
+.admin-row {
+  display: grid; gap: 4px; padding: 14px 16px; text-align: left; cursor: pointer;
+  border: 1px solid rgba(6,109,168,.14); border-radius: 16px; background: rgba(255,255,255,.78);
+  transition: border-color .18s ease, transform .16s ease;
+}
+.admin-row:hover { transform: translateX(2px); }
+.admin-row.is-selected { border-color: #12aeea; box-shadow: 0 0 0 2px rgba(18,174,234,.16); }
+.admin-row b { font-size: 15px; }
+.admin-row small { color: #7d93a3; font-size: 11px; }
+.row-count { color: #d4622f; font-size: 11px; font-style: normal; font-weight: 700; }
+.theme-night .admin-row { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.05); }
+.theme-night .admin-row small { color: #8ea3b1; }
+
+.row-tag {
+  justify-self: start; padding: 3px 9px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+}
+.row-tag.bucket-reported { background: #fdece3; color: #b8511f; }
+.row-tag.bucket-uncertain { background: #fdf5e0; color: #97701a; }
+.row-tag.bucket-appealed { background: #e2f4fd; color: #0a6f9c; }
+.theme-night .row-tag.bucket-reported { background: rgba(212,98,47,.2); color: #ffb494; }
+.theme-night .row-tag.bucket-uncertain { background: rgba(192,138,30,.2); color: #f3d18a; }
+.theme-night .row-tag.bucket-appealed { background: rgba(18,174,234,.2); color: #93ddff; }
+
+.admin-detail {
+  min-height: 420px; padding: 24px 26px;
+  border: 1px solid rgba(6,109,168,.14); border-radius: 22px; background: rgba(255,255,255,.82);
+  box-shadow: 0 20px 60px rgba(6,109,168,.07);
+}
+.theme-night .admin-detail { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.05); box-shadow: none; }
+
+.admin-empty { color: #8fa5b3; font-size: 13px; padding: 18px 4px; }
+
+.detail-head { display: grid; gap: 6px; margin-bottom: 16px; }
+.detail-head h2 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -.03em; }
+.detail-head small { color: #7d93a3; font-size: 11px; }
+
+.detail-body {
+  padding: 18px 20px; margin-bottom: 16px; white-space: pre-wrap; line-height: 2; font-size: 14px;
+  border-radius: 16px; background: rgba(6,109,168,.05);
+}
+.theme-night .detail-body { background: rgba(255,255,255,.05); }
+
+.detail-meta { display: grid; gap: 12px; margin-bottom: 18px; }
+.detail-meta > div { display: grid; gap: 6px; }
+.detail-meta span { font-size: 11px; font-weight: 700; color: #7d93a3; }
+.detail-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.detail-chips i {
+  padding: 5px 11px; border-radius: 999px; font-style: normal; font-size: 11px;
+  border: 1px solid rgba(6,109,168,.18); background: rgba(255,255,255,.7);
+}
+.detail-chips i.flag { border-color: rgba(192,138,30,.4); background: #fdf5e0; color: #8a6414; }
+.detail-chips i.report { border-color: rgba(212,98,47,.35); background: #fdece3; color: #a9491c; }
+.theme-night .detail-chips i { border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.06); }
+.detail-appeal {
+  margin: 0; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.7;
+  background: rgba(18,174,234,.09); border-left: 3px solid #12aeea;
+}
+
+.detail-reason { display: grid; gap: 7px; margin-bottom: 16px; }
+.detail-reason > span { font-size: 12px; font-weight: 700; }
+.detail-reason textarea {
+  min-height: 84px; padding: 12px 14px; resize: vertical; line-height: 1.7; font: inherit; font-size: 13px;
+  border: 1px solid rgba(6,109,168,.2); border-radius: 14px; background: #fff; color: inherit;
+}
+.theme-night .detail-reason textarea { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #f2f6fa; }
+.reason-error { color: #c0392b; font-size: 11px; font-style: normal; }
+
+.detail-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.admin-keep, .admin-remove {
+  height: 44px; padding: 0 22px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: transform .16s ease, box-shadow .18s ease;
+}
+.admin-keep { border: 1px solid rgba(6,109,168,.24); background: #fff; color: #0a6f9c; }
+.admin-remove { border: 1px solid #c0392b; background: #c0392b; color: #fff; }
+.admin-keep:hover, .admin-remove:hover { transform: translateY(-1px); }
+.theme-night .admin-keep { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); color: #9be8ff; }
+
+.admin-toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+  padding: 13px 22px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: #12232e; color: #eaf6ff; box-shadow: 0 20px 50px rgba(0,0,0,.28);
+  animation: admin-toast-in .3s ease;
+}
+@keyframes admin-toast-in { from { opacity: 0; transform: translate(-50%, 8px) } }
+
+@media (max-width: 1000px) {
+  .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-body { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .admin-stats { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-stat, .admin-row, .admin-keep, .admin-remove { transition: none }
+  .admin-toast { animation: none }
+}
+
+/* ── 待审核 / 审核中 ─────────────────────────────────────────── */
+.desk-filter {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 4px;
+  border-radius: 999px;
+  background: rgba(6, 109, 168, 0.07);
+}
+.desk-filter button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #5d7a8c;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.desk-filter button.is-active { background: #fff; color: #0a3d57; box-shadow: 0 2px 8px rgba(6,109,168,.12); }
+.desk-filter button i {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(6, 109, 168, 0.12);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+.theme-night .desk-filter { background: rgba(255, 255, 255, 0.06); }
+.theme-night .desk-filter button { color: #9fb4c2; }
+.theme-night .desk-filter button.is-active { background: rgba(255, 255, 255, 0.14); color: #f2f6fa; box-shadow: none; }
+.theme-night .desk-filter button i { background: rgba(255, 255, 255, 0.14); }
+
+.row-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.desk-tag {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.desk-tag.is-pending { background: #eef2f5; color: #5d7a8c; }
+.desk-tag.is-reviewing { background: #e6f7ec; color: #2f7d4f; }
+.theme-night .desk-tag.is-pending { background: rgba(255, 255, 255, 0.1); color: #9fb4c2; }
+.theme-night .desk-tag.is-reviewing { background: rgba(72, 199, 126, 0.2); color: #8fe4b0; }

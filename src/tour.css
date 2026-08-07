@@ -100,7 +100,8 @@
 .tour-dots {
   display: flex;
   gap: 5px;
-  margin: 14px 0 14px;
+  /* 收紧一点：卡片每矮一点，越不容易压住它自己让用户点开的浮窗 */
+  margin: 10px 0 12px;
 }
 
 .tour-dots i {

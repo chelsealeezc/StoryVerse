@@ -61,6 +61,8 @@ const gatewayCopy = {
     enter: "进入 StoryVerse",
     already: "已经有账户？",
     newHere: "第一次来到这里？",
+    adminPrefix: "审核人员？",
+    adminAction: "进入内容审核台",
     forgotPrefix: "忘记密码？",
     forgotAction: "点击找回",
     resetTitle: "找回密码",
@@ -111,6 +113,8 @@ const gatewayCopy = {
     enter: "Enter StoryVerse",
     already: "Already have an account?",
     newHere: "New here?",
+    adminPrefix: "Reviewer?",
+    adminAction: "Open the moderation desk",
     forgotPrefix: "Forgot password?",
     forgotAction: "Recover",
     resetTitle: "Recover password",
@@ -412,6 +416,7 @@ export function Auragate({
   authMode = "signup",
   onSectionChange,
   onAuthModeChange,
+  onAdmin,
   themeMode = "day",
   onThemeModeChange = () => {},
 }: {
@@ -419,6 +424,7 @@ export function Auragate({
   onLanguageChange?: (language: "zh" | "en") => void;
   onHome?: () => void;
   onComplete: () => void;
+  onAdmin?: () => void;
   section?: GatewaySection;
   authMode?: "signup" | "login";
   onSectionChange?: (section: GatewaySection) => void;
@@ -685,6 +691,7 @@ export function Auragate({
           mode={authMode}
           language={language}
           onModeChange={mode => onAuthModeChange?.(mode)}
+          onAdmin={() => onAdmin?.()}
         />
         <Footer isMobile={isMobile} language={language} />
       </section>
@@ -754,13 +761,14 @@ function Footer({ isMobile, language }: { isMobile: boolean; language: "zh" | "e
   );
 }
 
-function ImmersiveLogin({ isMobile, onComplete, authRef, mode, language, onModeChange }: {
+function ImmersiveLogin({ isMobile, onComplete, authRef, mode, language, onModeChange, onAdmin }: {
   isMobile: boolean;
   onComplete: () => void;
   authRef: RefObject<HTMLElement>;
   mode: "signup" | "login";
   language: "zh" | "en";
   onModeChange: (mode: "signup" | "login") => void;
+  onAdmin: () => void;
 }) {
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
@@ -843,6 +851,13 @@ function ImmersiveLogin({ isMobile, onComplete, authRef, mode, language, onModeC
               {mode === "signup" ? `${t.already} ` : `${t.newHere} `}
               <button type="button" style={styles.loginHintLink} onClick={() => onModeChange(mode === "signup" ? "login" : "signup")}>
                 {mode === "signup" ? t.login : t.signup}
+              </button>
+            </p>
+            {/* 审核人员入口。普通用户看得到但用不了 —— 需要工号口令。 */}
+            <p style={styles.loginHint}>
+              {t.adminPrefix}{" "}
+              <button type="button" style={styles.loginHintLink} onClick={onAdmin}>
+                {t.adminAction}
               </button>
             </p>
           </div>

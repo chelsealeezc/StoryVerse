@@ -15,16 +15,19 @@ import { initialState, loadState, saveState } from "./storage";
 import { Auragate as PrototypeGateway } from "./PrototypeGateway";
 import { StoryGalaxy } from "./StoryGalaxy";
 import { Tour } from "./Tour";
+import { AdminConsole } from "./AdminConsole";
+import { moderateStory, moderationCopy } from "./moderation";
+import type { ModerationResult } from "./moderation";
 import type { PlaceSuggestion } from "./places";
 import type { TourSceneId } from "./tour-steps";
-import type { AppState, Draft, Language, Reaction, ResonanceMode, Story } from "./types";
+import type { AppState, Draft, InboxMessage, Language, Reaction, ResonanceMode, ReviewItem, Story } from "./types";
 import "./tour.css";
 
 /** 引导相关的三个回调在 Wizard / Resonance 之间是同一组，抽出来少写几遍 */
 interface TourProps {
   tourActive: (scene: TourSceneId) => boolean;
   onTourFinish: (scene: TourSceneId) => void;
-  onTourSkip: () => void;
+  onTourSkip: (scene: TourSceneId) => void;
 }
 
 type ThemeMode = "day" | "night";
@@ -63,6 +66,7 @@ const routeMap = {
   resonance: "/Resonance",
   recommendations: "/Recommendations",
   starLobby: "/StarLobby",
+  admin: "/Admin",
 } as const;
 const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -84,6 +88,7 @@ function routePatchFromPath(pathname = window.location.pathname): Partial<AppSta
   if (path === routeMap.resonance) return { screen: "resonance" };
   if (path === routeMap.recommendations) return { screen: "recommendations" };
   if (path === routeMap.starLobby) return { screen: "atlas" };
+  if (path === routeMap.admin) return { screen: "admin" };
   return { screen: "intro", gatewaySection: "intro" };
 }
 
@@ -94,6 +99,7 @@ function pathFromState(state: AppState, gatewaySection: "intro" | "preview" | "a
   if (state.screen === "resonance") return routeMap.resonance;
   if (state.screen === "recommendations") return routeMap.recommendations;
   if (state.screen === "atlas") return routeMap.starLobby;
+  if (state.screen === "admin") return routeMap.admin;
   void gatewaySection;
   void authMode;
   return routeMap.intro;
@@ -676,6 +682,51 @@ function GenderField({ draft, setDraft, t, wide }: {
   );
 }
 
+/**
+ * 管理端登录。刻意做成独立页面而不是塞进 PrototypeGateway ——
+ * 那个文件上游改得很频繁，动它每次同步都要解冲突。
+ *
+ * 注意：这是纯前端的演示门禁，任何知道 /Admin 的人改一下 localStorage 就能进，
+ * 不构成任何真实的权限控制。真正的角色校验必须放在后端。
+ */
+function AdminGate({ language, themeMode, onBack, onSignedIn, onThemeModeChange }: {
+  language: Language; themeMode: ThemeMode; onBack: () => void; onSignedIn: () => void; onThemeModeChange: (theme: ThemeMode) => void;
+}) {
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [error, setError] = useState(false);
+  const zh = language === "zh";
+
+  const submit = () => {
+    if (user.trim() === "admin" && pass === "admin123") { onSignedIn(); return; }
+    setError(true);
+  };
+
+  return (
+    <main className={`admin-gate ${themeMode === "night" ? "theme-night admin-universe" : "admin-sky"}`}>
+      <div className="admin-gate-card">
+        <button className="admin-gate-theme" aria-label={zh ? "切换主题" : "Switch theme"} onClick={() => onThemeModeChange(themeMode === "night" ? "day" : "night")}>
+          {themeMode === "night" ? "☀" : "☾"}
+        </button>
+        <button className="admin-gate-back" onClick={onBack}>← {zh ? "返回 StoryVerse" : "Back to StoryVerse"}</button>
+        <h1>{zh ? "内容审核台" : "Moderation desk"}</h1>
+        <p>{zh ? "仅供审核人员使用。登录后可以处理被举报、机器不确定与申诉的故事。" : "For reviewers only. Sign in to handle reported, uncertain and appealed stories."}</p>
+        <label><span>{zh ? "工号" : "Staff ID"}</span>
+          <input value={user} onChange={e => { setUser(e.target.value); setError(false); }} placeholder="admin" />
+        </label>
+        <label><span>{zh ? "密码" : "Password"}</span>
+          <input type="password" value={pass} onChange={e => { setPass(e.target.value); setError(false); }} placeholder="admin123" />
+        </label>
+        {error && <em className="admin-gate-error">{zh ? "工号或密码不对。" : "Wrong staff ID or password."}</em>}
+        <button className="admin-gate-submit" onClick={submit}>{zh ? "进入审核台" : "Enter the desk"}</button>
+        <p className="admin-gate-demo">
+          {zh ? "演示账号：admin / admin123 —— 这是纯前端门禁，不是真实权限控制。" : "Demo credentials: admin / admin123 — front-end only, not real access control."}
+        </p>
+      </div>
+    </main>
+  );
+}
+
 function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChange, tourActive, onTourFinish, onTourSkip }: {
   state: AppState; update: AppUpdate; onPublished: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void;
 } & TourProps) {
@@ -699,6 +750,8 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const [leaveTarget, setLeaveTarget] = useState<number | null>(null);
   const [editingBody, setEditingBody] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [moderation, setModeration] = useState<ModerationResult | null>(null);
+  const [appealNote, setAppealNote] = useState("");
   const [tagDrafts, setTagDrafts] = useState<Record<string, string[]>>({});
   const [imageStyle, setImageStyle] = useState<ImageStyle>("minimal-realistic");
   const [storyImage, setStoryImage] = useState("");
@@ -830,6 +883,53 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const canContinueCollection = missingCollection.length === 0;
   const canContinueGuide = !!draft.guide && (draft.guide !== "other" || draft.customGuide.trim().length >= 2);
   const savedTime = draft.savedAt ? new Date(draft.savedAt).toLocaleTimeString(language === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" }) : "";
+  const mCopy = moderationCopy[language];
+
+  /*
+   * 发布前的安全检查。命中就弹柔和提示，不直接说「违规」，并且永远留一条
+   * 「仍然提交」的路 —— 提交后进人工审核区，由管理员决定。没命中就直接发布。
+   */
+  const attemptPublish = () => {
+    const result = moderateStory(draft.body);
+    if (result.flags.length === 0) { onPublished(); return; }
+    setModeration(result);
+  };
+
+  const sendToReview = (bucket: "uncertain" | "appealed") => {
+    const title = draft.title || state.analysis?.suggestedTitle || "未命名故事";
+    const item: ReviewItem = {
+      // 别截断 UUID：切成 8 位只剩 32 bit，几万条就会开始撞
+      id: `rv-${crypto.randomUUID()}`,
+      title,
+      body: draft.body,
+      tags: Object.values(tagDrafts).flat().length ? Object.values(tagDrafts).flat() : Object.values(state.analysis?.tags ?? {}).flat(),
+      author: language === "zh" ? "我（本机演示）" : "Me (local demo)",
+      city: draft.city,
+      createdAt: Date.now(),
+      bucket,
+      status: "pending",
+      flags: moderation?.flags,
+      appealNote: bucket === "appealed" ? appealNote.trim() || undefined : undefined,
+      mine: true,
+    };
+    // 进队列的同时给作者一条「待审核」通知，后续状态由管理端推进
+    const notice: InboxMessage = {
+      id: `msg-${item.id}`,
+      status: "pending",
+      kind: "flagged",
+      storyTitle: title,
+      reason: "",
+      createdAt: Date.now(),
+      read: false,
+    };
+    update(previous => ({
+      reviewQueue: [item, ...previous.reviewQueue],
+      inbox: [notice, ...previous.inbox],
+    }));
+    setModeration(null);
+    setAppealNote("");
+    onPublished();
+  };
   const showCityHint = !!hints.city && hints.city.name !== draft.city;
   const showAgeHint = hints.age !== null && String(hints.age) !== draft.age;
   const presetTags: Record<string, string[]> = {
@@ -1026,9 +1126,37 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
               <p className="comic-privacy">生成时会将故事正文发送给阿里云百炼；每次只生成一张图片并按一张计费。图片只保留在当前页面，刷新后消失。</p>
             </div>
             <div className="publish-note"><Check size={17} />确认后将进入模拟安全检查，并匿名加入故事池。</div>
-            <PrimaryButton onClick={onPublished}>{t.publish}</PrimaryButton>
+            <PrimaryButton onClick={attemptPublish}>{t.publish}</PrimaryButton>
           </div>
         </section>
+      )}
+      {moderation && (
+        <div className="modal-backdrop">
+          <div className="report-dialog moderation-dialog">
+            {moderation.flags.map(flag => (
+              <div className="moderation-block" key={flag}>
+                <h2>{mCopy[flag].title}</h2>
+                <p>{mCopy[flag].body}</p>
+              </div>
+            ))}
+            {moderation.samples.length > 0 && (
+              <div className="moderation-samples">
+                <span>{mCopy.detected}</span>
+                {moderation.samples.map((sample, i) => <code key={i}>{sample}</code>)}
+              </div>
+            )}
+            <label className="moderation-appeal">
+              <span className="field-name">{mCopy.appeal}</span>
+              <input value={appealNote} placeholder={mCopy.appealPlaceholder} onChange={e => setAppealNote(e.target.value)} />
+            </label>
+            <p className="moderation-note">{mCopy.submitNote}</p>
+            <div className="dialog-actions three">
+              <button className="button button-ghost" onClick={() => { setModeration(null); setAppealNote(""); }}>{mCopy.revise}</button>
+              <button className="button button-ghost" onClick={() => sendToReview("appealed")}>{mCopy.appeal}</button>
+              <button className="button button-primary" onClick={() => sendToReview("uncertain")}>{mCopy.submit}</button>
+            </div>
+          </div>
+        </div>
       )}
       {pasteDialog && <div className="modal-backdrop"><div className="report-dialog"><h2>{t.pasteTitle}</h2><div className="dialog-actions"><button className="button button-ghost" onClick={() => setPasteDialog(false)}>{t.pasteYes}</button><button className="button button-primary" onClick={() => setPasteDialog(false)}>{t.pasteOther}</button></div></div></div>}
       {leaveTarget !== null && <div className="modal-backdrop"><div className="report-dialog"><h2>{t.leaveTitle}</h2><div className="dialog-actions three"><button className="button button-ghost" onClick={() => setLeaveTarget(null)}>{t.keepWriting}</button><button className="button button-ghost" onClick={() => confirmLeave(false)}>{t.leaveAnyway}</button><button className="button button-primary" onClick={() => confirmLeave(true)}>{t.saveDraft}</button></div></div></div>}
@@ -1274,6 +1402,39 @@ export default function App() {
   }, [state.screen, state.wizardStep, gatewaySection, authMode]);
   const go = (screen: string) => update({ screen });
   const goHome = () => { setGatewaySection("intro"); update({ screen: "intro", onboarded: false }); };
+
+  /*
+   * 管理员做完决定：更新队列状态；下架时把对应的星点记下来（星图会过滤掉），
+   * 并且只有作者本人的故事才往收件箱推通知。
+   */
+  const decideReview = (item: ReviewItem, keep: boolean, reason: string, message: InboxMessage) => {
+    update(previous => ({
+      reviewQueue: previous.reviewQueue.map(entry =>
+        entry.id === item.id
+          ? { ...entry, status: keep ? "kept" as const : "removed" as const, removalReason: keep ? undefined : reason }
+          : entry),
+      // 已有同一条故事的通知就就地改成「已有结果」，没有才新插一条
+      inbox: !item.mine
+        ? previous.inbox
+        : previous.inbox.some(m => m.id === `msg-${item.id}`)
+          ? previous.inbox.map(m => m.id === `msg-${item.id}`
+              ? { ...m, status: "resolved" as const, kind: message.kind, reason: message.reason, createdAt: message.createdAt, read: false }
+              : m)
+          : [message, ...previous.inbox],
+    }));
+  };
+
+  /** 审核人员打开某条 → 队列里标记为「审核中」，作者那边的通知同步跟进 */
+  const openReview = (item: ReviewItem) => {
+    update(previous => ({
+      reviewQueue: previous.reviewQueue.map(entry =>
+        entry.id === item.id && !entry.opened ? { ...entry, opened: true } : entry),
+      inbox: !item.mine ? previous.inbox : previous.inbox.map(m =>
+        m.id === `msg-${item.id}` && m.status === "pending"
+          ? { ...m, status: "reviewing" as const, read: false }
+          : m),
+    }));
+  };
   const startNewStory = () => update(previous => {
     const shouldArchive = previous.draft.body.trim() || previous.draft.title.trim();
     return {
@@ -1291,20 +1452,47 @@ export default function App() {
   /*
    * 新手引导的调度。每个场景只在「引导还开着」且「这个场景没播过」时出现，
    * 所以用户往回退一步不会被同一段引导再拦一次。
-   * 跳过 = 整条引导关掉；共鸣页是最后一站，走完就关。
+   *
+   * 「跳过本页」只把当前场景标记成看过，后面的页面照常播 —— 在第一步嫌啰嗦
+   * 而跳过，不该连带失去后面所有页面的引导。整条引导只在走完最后一站
+   * （星空大厅）时才真正关闭。
    */
   const tourSeen = (scene: TourSceneId) => state.tour.seen.includes(scene);
   const tourActive = (scene: TourSceneId) => state.tour.enabled && !tourSeen(scene);
-  const finishTour = (scene: TourSceneId) => update(previous => ({
+  const markSeen = (previous: AppState, scene: TourSceneId, done: boolean) => ({
     tour: {
-      enabled: scene === "resonance" ? false : previous.tour.enabled,
+      enabled: done ? false : previous.tour.enabled,
       seen: previous.tour.seen.includes(scene) ? previous.tour.seen : [...previous.tour.seen, scene],
     },
-  }));
-  const skipTour = () => update({ tour: { enabled: false, seen: state.tour.seen } });
+  });
+  // 大厅是流程的最后一站，走完＝整条引导结束
+  const finishTour = (scene: TourSceneId) => update(previous => markSeen(previous, scene, scene === "lobby"));
+  const skipTour = (scene: TourSceneId) => update(previous => markSeen(previous, scene, false));
 
   let content: React.ReactNode;
-  if (["intro", "icebreaker", "preview", "auth"].includes(state.screen)) {
+  if (state.screen === "admin") {
+    content = state.isAdmin
+      ? <AdminConsole
+          language={state.language}
+          themeMode={themeMode}
+          queue={state.reviewQueue}
+          onDecide={decideReview}
+          onOpen={openReview}
+          // 退出只清管理员身份，screen 仍是 admin，于是落回管理员登录页
+          onLogout={() => update({ isAdmin: false })}
+          onResetDemo={() => update({ reviewQueue: initialState.reviewQueue, inbox: [] })}
+          onLanguageChange={language => update({ language })}
+          onThemeModeChange={setThemeMode}
+        />
+      : <AdminGate
+          language={state.language}
+          themeMode={themeMode}
+          onBack={() => update({ screen: "intro" })}
+          onSignedIn={() => update({ isAdmin: true })}
+          onThemeModeChange={setThemeMode}
+        />;
+  }
+  else if (["intro", "icebreaker", "preview", "auth"].includes(state.screen)) {
     content = <PrototypeGateway
       language={state.language}
       onLanguageChange={language => update({ language })}
@@ -1312,20 +1500,42 @@ export default function App() {
       /*
        * 「注册」本身就是「第一次来」的信号，所以注册成功时把引导重新武装一次。
        * 不这么做的话，浏览器里残留的 tour.enabled=false（上一次看完或跳过留下的）
-       * 会让新注册的人完全看不到引导 —— 这正是实际踩到的坑。登录不重置。
+       * 会让新注册的人完全看不到引导 —— 这是实际踩到过的坑。登录不重置。
        *
-       * 引导要求「先认识星空大厅，最后才介绍写故事按钮」，所以引导开着时注册完
-       * 先落在大厅，由引导最后一步把人送进写作流程；引导关掉后恢复原行为。
+       * 注册完直接进写故事流程（先写故事，星空大厅放在最后），所以这里不再拐去 atlas。
        */
       onComplete={() => update(previous => {
-        const tour = authMode === "signup" ? { enabled: true, seen: [] } : previous.tour;
+        /*
+         * 「注册」＝ 全新账号：既要重开引导，也要把「已经写过故事」清掉。
+         * 否则浏览器里残留的 firstStoryComplete=true 会让新注册的人直接掉进
+         * 星空大厅 —— 而大厅按设计是整条流程的最后一站。登录则完全保留原状态。
+         */
+        if (authMode === "signup") {
+          return {
+            onboarded: true,
+            accountCreated: true,
+            tour: { enabled: true, seen: [] },
+            firstStoryComplete: false,
+            analysis: null,
+            draft: { ...initialState.draft, startedAt: Date.now() },
+            screen: "wizard",
+            wizardStep: 0,
+          };
+        }
+        /*
+         * 登录：没有后端，所以不校验任何东西，直接载入演示账号「林小满」——
+         * 她已经写过故事、收件箱里有三种状态的通知，正好用来看用户端的接收效果。
+         * 提 PR 时连同 admin-mock.ts 一起删掉这一段。
+         */
         return {
           onboarded: true,
           accountCreated: true,
-          tour,
-          screen: previous.firstStoryComplete || tour.enabled ? "atlas" : "wizard",
+          firstStoryComplete: true,
+          inbox: previous.inbox.length ? previous.inbox : initialState.inbox,
+          screen: "atlas",
         };
       })}
+      onAdmin={() => update({ screen: "admin" })}
       section={gatewaySection}
       authMode={authMode}
       onAuthModeChange={setAuthMode}
@@ -1349,7 +1559,35 @@ export default function App() {
     onResonanceChange={resonance => update({ resonance })}
     showTour={tourActive("lobby")}
     onTourFinish={() => finishTour("lobby")}
-    onTourSkip={skipTour}
+    onTourSkip={() => skipTour("lobby")}
+    removedNodeIds={state.reviewQueue.filter(item => item.status === "removed" && item.nodeId).map(item => item.nodeId!)}
+    inbox={state.inbox}
+    onReadInbox={() => update(previous => ({ inbox: previous.inbox.map(m => ({ ...m, read: true })) }))}
+    onReport={(node, reason, note) => update(previous => {
+      // 同一颗星被多次举报就累加计数，不重复插条目
+      const existing = previous.reviewQueue.find(item => item.nodeId === node.id && item.status === "pending");
+      if (existing) {
+        return { reviewQueue: previous.reviewQueue.map(item => item === existing
+          ? { ...item, bucket: "reported" as const, reportCount: (item.reportCount ?? 0) + 1, reportReasons: [...(item.reportReasons ?? []), reason] }
+          : item) };
+      }
+      const item: ReviewItem = {
+        // 用时间戳当 id：同一毫秒内的两次举报会撞，改成 UUID
+        id: `rv-${crypto.randomUUID()}`,
+        nodeId: node.id,
+        title: node.label,
+        body: note.trim() ? `${node.desc}\n\n（举报补充说明：${note.trim()}）` : node.desc,
+        tags: [node.theme],
+        author: state.language === "zh" ? "匿名用户" : "Anonymous",
+        city: "",
+        createdAt: Date.now(),
+        bucket: "reported",
+        status: "pending",
+        reportCount: 1,
+        reportReasons: [reason],
+      };
+      return { reviewQueue: [item, ...previous.reviewQueue] };
+    })}
   />;
 
   return <>{content}</>;

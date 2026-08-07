@@ -183,6 +183,20 @@ input::placeholder,textarea::placeholder { color: #aaa69e; }.auth-form input { h
 .age-field{position:relative}.age-field input{padding-right:34px}.age-field>span{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none}.ai-hint{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:-4px 0 24px;padding:11px 13px;border-radius:13px;background:#f3f7e6;color:#586215;font-size:12px}
 /* 选择「其他」性别时的生图提醒 —— 用琥珀色，区别于绿色的 AI 建议条 */
 .gender-hint{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin:-8px 0 22px;padding:11px 13px;border-radius:13px;background:#fdf3e3;color:#8a5a1b;font-size:12px;line-height:1.6}
+/* 发布前的内容安全提示：措辞柔和，永远留「仍然提交」这条路 */
+.moderation-dialog{width:min(560px,92vw);text-align:left}
+.moderation-block{margin-bottom:14px}
+.moderation-block h2{margin:0 0 6px;font-size:19px}
+.moderation-block p{margin:0;color:var(--muted);font-size:13px;line-height:1.8}
+.moderation-samples{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:4px 0 14px;padding:11px 13px;border-radius:12px;background:#fdf3e3}
+.moderation-samples>span{color:#8a5a1b;font-size:11px;font-weight:700}
+.moderation-samples code{padding:3px 8px;border-radius:7px;background:rgba(138,90,27,.12);color:#7a4d13;font-size:12px}
+.moderation-appeal{display:grid;gap:6px;margin-bottom:12px}
+.moderation-note{margin:0 0 16px;color:var(--muted);font-size:11px;line-height:1.6}
+.theme-night .moderation-samples{background:rgba(232,163,61,.14)}
+.theme-night .moderation-samples>span{color:#f2cf94}
+.theme-night .moderation-samples code{background:rgba(255,255,255,.1);color:#f6dcae}
+
 /* 「只是建议，可以忽略」——退一档，别和上面的提醒抢注意力 */
 .gender-hint small{color:#b08a52;font-size:10px;font-weight:400}
 .theme-night .gender-hint small{color:#c9a778}
