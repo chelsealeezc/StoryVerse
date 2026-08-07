@@ -1,5 +1,5 @@
 import { emptyDraft } from "./data";
-// 演示用假数据，提 PR 前连同 src/admin-mock.ts 一起删掉
+// 演示用假数据：刻意保留，后端审核接口就绪后连同 src/admin-mock.ts 一起删掉
 import { demoInbox, demoReviewQueue } from "./admin-mock";
 import type { AppState } from "./types";
 
@@ -21,8 +21,8 @@ export const initialState: AppState = {
   analysis: null,
   // 首次访问：localStorage 里没有记录，enabled 保持 true，引导就会自动播放
   tour: { enabled: true, seen: [] },
-  reviewQueue: demoReviewQueue,   // 演示用；正式版应为 []
-  inbox: demoInbox,               // 演示用；正式版应为 []
+  reviewQueue: demoReviewQueue,   // 演示用；接后端后改为 []
+  inbox: demoInbox,               // 演示用；接后端后改为 []
   isAdmin: false,
 };
 
