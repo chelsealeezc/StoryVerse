@@ -53,7 +53,18 @@ export function loadState(): AppState {
 }
 
 export function saveState(state: AppState) {
-  localStorage.setItem(KEY, JSON.stringify({ language: state.language }));
+  /*
+   * 上游只再持久化 language（其余状态都回后端了）。这里必须把 loadState 里
+   * 额外恢复的四项一起写回去 —— 只读不写的话，刷新一次引导进度、审核队列和
+   * 收件箱就全没了。等后端补上对应接口，这四项连同 loadState 里的一起删掉。
+   */
+  localStorage.setItem(KEY, JSON.stringify({
+    language: state.language,
+    tour: state.tour,
+    reviewQueue: state.reviewQueue,
+    inbox: state.inbox,
+    isAdmin: state.isAdmin,
+  }));
 }
 
 export function resetState() {
