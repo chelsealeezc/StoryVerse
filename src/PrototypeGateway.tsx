@@ -133,8 +133,10 @@ const termsUrl = "https://icnh1tjz358q.feishu.cn/wiki/Wb3NwnFEWig5V0kTROGcd35nnl
 
 function isValidEmailOrChinaPhone(value: string) {
   const trimmed = value.trim();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) || /^1[3-9]\d{9}$/.test(trimmed);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 }
+
+export type GatewayAuthInput = { mode: "signup" | "login"; displayName: string; email: string; password: string };
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -418,7 +420,7 @@ export function Auragate({
   language?: "zh" | "en";
   onLanguageChange?: (language: "zh" | "en") => void;
   onHome?: () => void;
-  onComplete: () => void;
+  onComplete: (input: GatewayAuthInput) => Promise<void> | void;
   section?: GatewaySection;
   authMode?: "signup" | "login";
   onSectionChange?: (section: GatewaySection) => void;
@@ -756,7 +758,7 @@ function Footer({ isMobile, language }: { isMobile: boolean; language: "zh" | "e
 
 function ImmersiveLogin({ isMobile, onComplete, authRef, mode, language, onModeChange }: {
   isMobile: boolean;
-  onComplete: () => void;
+  onComplete: (input: GatewayAuthInput) => Promise<void> | void;
   authRef: RefObject<HTMLElement>;
   mode: "signup" | "login";
   language: "zh" | "en";
@@ -766,8 +768,18 @@ function ImmersiveLogin({ isMobile, onComplete, authRef, mode, language, onModeC
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
-  const valid = isValidEmailOrChinaPhone(email) && password.length >= 6 && (mode === "login" || nickname.trim().length >= 2);
+  const [submitting, setSubmitting] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const valid = isValidEmailOrChinaPhone(email) && password.length >= 10 && (mode === "login" || nickname.trim().length >= 2);
   const t = gatewayCopy[language];
+  const submit = async () => {
+    if (!valid || submitting) return;
+    setSubmitting(true);
+    setAuthError("");
+    try { await onComplete({ mode, displayName: nickname.trim(), email: email.trim(), password }); }
+    catch (error) { setAuthError(error instanceof Error ? error.message : (language === "zh" ? "暂时无法登录，请稍后重试。" : "Unable to sign in. Please try again.")); }
+    finally { setSubmitting(false); }
+  };
 
   return (
     <section id="storyverse-auth" ref={authRef} style={{ ...styles.loginSection, padding: isMobile ? "92px 22px 40px" : "132px 44px 36px" }}>
@@ -827,8 +839,9 @@ function ImmersiveLogin({ isMobile, onComplete, authRef, mode, language, onModeC
               placeholder={mode === "signup" ? t.signupPasswordPlaceholder : t.loginPasswordPlaceholder}
             />
           </label>
-          <button style={{ ...styles.primaryButton, opacity: valid ? 1 : 0.48, cursor: valid ? "pointer" : "not-allowed" }} disabled={!valid} onClick={onComplete}>
-            {mode === "signup" ? t.createAccount : t.enter}
+          {authError && <p role="alert" style={{ color: "#b42318", fontSize: 13, margin: "0 0 12px" }}>{authError}</p>}
+          <button style={{ ...styles.primaryButton, opacity: valid && !submitting ? 1 : 0.48, cursor: valid && !submitting ? "pointer" : "not-allowed" }} disabled={!valid || submitting} onClick={() => void submit()}>
+            {submitting ? (language === "zh" ? "正在连接…" : "Connecting…") : mode === "signup" ? t.createAccount : t.enter}
           </button>
           <div style={styles.loginAssist}>
             {mode === "login" && (

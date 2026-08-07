@@ -50,6 +50,13 @@ type HandlerOptions = {
   qwenModel?: string;
 };
 
+export type ImageGenerationResult = {
+  imageUrl: string;
+  imageStyle: ImageStyle;
+  highlight: Pick<StoryHighlight, "title" | "moment" | "scene" | "action" | "emotion">;
+  imagePrompt: string;
+};
+
 type Panel = {
   order: number;
   purpose: string;
@@ -407,86 +414,89 @@ export function createImageGenerationHandler({
   imageModel = "wan2.7-image",
   qwenModel = "qwen-plus",
 }: HandlerOptions) {
+  const generate = createImageGenerationService({ apiKey, workspaceId, imageBaseUrl, qwenBaseUrl, imageModel, qwenModel });
   return async (request: IncomingMessage, response: ServerResponse) => {
     if (request.method !== "POST") {
       response.setHeader("Allow", "POST");
       respond(response, 405, { error: "只支持 POST 请求。" });
       return;
     }
-    if (!apiKey) {
-      respond(response, 503, { error: "尚未配置阿里云百炼 API Key。" });
-      return;
-    }
-    const wanBaseUrl = imageBaseUrl || (validWorkspaceId(workspaceId) ? `https://${workspaceId}.cn-beijing.maas.aliyuncs.com` : "");
-    if (!wanBaseUrl) {
-      respond(response, 503, { error: "故事图片生成需要百炼 Workspace ID。请在服务端设置 DASHSCOPE_WORKSPACE_ID。" });
-      return;
-    }
-
     try {
       const requestInput = await readJson(request);
-      const input = normalizedInput(requestInput);
-      if (input.story.length < 30) {
-        respond(response, 400, { error: "故事内容太短，请至少写 30 个字后再生成图片。" });
-        return;
-      }
-
-      if (requestInput.mode === "single-highlight-v1") {
-        if (!isImageStyle(requestInput.imageStyle)) {
-          respond(response, 400, { error: "请选择有效的图片风格。" });
-          return;
-        }
-        const imageStyle = requestInput.imageStyle;
-        const highlight = await createHighlight(input, imageStyle, apiKey, qwenBaseUrl, qwenModel);
-        const imagePrompt = buildSingleImagePrompt(highlight, imageStyle);
-        const temporaryUrl = await generateSingleImage(imagePrompt, apiKey, wanBaseUrl, imageModel);
-        const imageUrl = await downloadAsDataUrl(temporaryUrl);
-        respond(response, 200, {
-          imageUrl,
-          imageStyle,
-          highlight: {
-            title: highlight.title,
-            moment: highlight.moment,
-            scene: highlight.scene,
-            action: highlight.action,
-            emotion: highlight.emotion,
-          },
-          imagePrompt,
-        });
-        return;
-      }
-
-      const storyboard = await createStoryboard(input, apiKey, qwenBaseUrl, qwenModel);
-      const temporaryUrls = await generateComic(storyboard, apiKey, wanBaseUrl, imageModel);
-      const imageUrls = await Promise.all(temporaryUrls.map(downloadAsDataUrl));
-      respond(response, 200, { storyboard, imageUrls });
+      respond(response, 200, await generate(requestInput));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (error instanceof SyntaxError || message === "HIGHLIGHT_INVALID") {
-        respond(response, 502, { error: "千问没有返回有效的故事高光，请重新生成。" });
-      } else if (message.startsWith("HIGHLIGHT_UPSTREAM:")) {
-        respond(response, 502, { error: `千问高光提取失败：${message.slice(19, 319)}` });
-      } else if (message.startsWith("SINGLE_IMAGE_UPSTREAM:")) {
-        respond(response, 502, { error: `万相单图生成失败：${message.slice(22, 322)}` });
-      } else if (message.startsWith("SINGLE_IMAGE_COUNT:")) {
-        respond(response, 502, { error: `万相本次返回了 ${message.slice(19)} 张图片，预期只生成一张，请重新生成。` });
-      } else if (error instanceof SyntaxError || message === "STORYBOARD_INVALID") {
-        respond(response, 502, { error: "千问没有返回有效的四格分镜，请重新生成。" });
-      } else if (message.startsWith("STORYBOARD_UPSTREAM:")) {
-        respond(response, 502, { error: `千问分镜失败：${message.slice(20, 320)}` });
-      } else if (message.startsWith("IMAGE_UPSTREAM:")) {
-        respond(response, 502, { error: `万相四格生成失败：${message.slice(15, 315)}` });
-      } else if (message.startsWith("IMAGE_COUNT:")) {
-        respond(response, 502, { error: `万相本次只返回了 ${message.slice(12)} 张图片，没有形成完整四格，请重新生成。` });
-      } else if (message === "IMAGE_DOWNLOAD") {
-        respond(response, 502, { error: "图片已生成，但临时图片下载失败，请重新生成。" });
-      } else if (message === "PAYLOAD_TOO_LARGE") {
-        respond(response, 413, { error: "故事内容过长，无法生成图片。" });
-      } else if (error instanceof Error && error.name === "TimeoutError") {
-        respond(response, 504, { error: "故事图片生成超时，请稍后重试。" });
-      } else {
-        respond(response, 502, { error: "暂时无法生成故事图片，请稍后重试。" });
-      }
+      const mapped = imageGenerationError(error);
+      respond(response, mapped.status, { error: mapped.message });
     }
   };
+}
+
+export function createImageGenerationService({
+  apiKey,
+  workspaceId,
+  imageBaseUrl,
+  qwenBaseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  imageModel = "wan2.7-image",
+  qwenModel = "qwen-plus",
+}: HandlerOptions) {
+  return async (requestInput: ImageRequest): Promise<ImageGenerationResult | { storyboard: Storyboard; imageUrls: string[] }> => {
+    if (!apiKey) throw new Error("IMAGE_CONFIG_API_KEY");
+    const wanBaseUrl = imageBaseUrl || (validWorkspaceId(workspaceId) ? `https://${workspaceId}.cn-beijing.maas.aliyuncs.com` : "");
+    if (!wanBaseUrl) throw new Error("IMAGE_CONFIG_WORKSPACE");
+    const input = normalizedInput(requestInput);
+    if (input.story.length < 30) throw new Error("STORY_TOO_SHORT");
+    if (requestInput.mode === "single-highlight-v1") {
+      if (!isImageStyle(requestInput.imageStyle)) throw new Error("IMAGE_STYLE_INVALID");
+      const imageStyle = requestInput.imageStyle;
+      const highlight = await createHighlight(input, imageStyle, apiKey, qwenBaseUrl, qwenModel);
+      const imagePrompt = buildSingleImagePrompt(highlight, imageStyle);
+      const temporaryUrl = await generateSingleImage(imagePrompt, apiKey, wanBaseUrl, imageModel);
+      const imageUrl = await downloadAsDataUrl(temporaryUrl);
+      return {
+        imageUrl,
+        imageStyle,
+        highlight: { title: highlight.title, moment: highlight.moment, scene: highlight.scene, action: highlight.action, emotion: highlight.emotion },
+        imagePrompt,
+      };
+    }
+    const storyboard = await createStoryboard(input, apiKey, qwenBaseUrl, qwenModel);
+    const temporaryUrls = await generateComic(storyboard, apiKey, wanBaseUrl, imageModel);
+    return { storyboard, imageUrls: await Promise.all(temporaryUrls.map(downloadAsDataUrl)) };
+  };
+}
+
+export function imageGenerationError(error: unknown) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "IMAGE_CONFIG_API_KEY") {
+        return { status: 503, message: "尚未配置阿里云百炼 API Key。" };
+      } else if (message === "IMAGE_CONFIG_WORKSPACE") {
+        return { status: 503, message: "故事图片生成需要百炼 Workspace ID。请在服务端设置 DASHSCOPE_WORKSPACE_ID。" };
+      } else if (message === "STORY_TOO_SHORT") {
+        return { status: 400, message: "故事内容太短，请至少写 30 个字后再生成图片。" };
+      } else if (message === "IMAGE_STYLE_INVALID") {
+        return { status: 400, message: "请选择有效的图片风格。" };
+      } else if (error instanceof SyntaxError || message === "HIGHLIGHT_INVALID") {
+        return { status: 502, message: "千问没有返回有效的故事高光，请重新生成。" };
+      } else if (message.startsWith("HIGHLIGHT_UPSTREAM:")) {
+        return { status: 502, message: `千问高光提取失败：${message.slice(19, 319)}` };
+      } else if (message.startsWith("SINGLE_IMAGE_UPSTREAM:")) {
+        return { status: 502, message: `万相单图生成失败：${message.slice(22, 322)}` };
+      } else if (message.startsWith("SINGLE_IMAGE_COUNT:")) {
+        return { status: 502, message: `万相本次返回了 ${message.slice(19)} 张图片，预期只生成一张，请重新生成。` };
+      } else if (error instanceof SyntaxError || message === "STORYBOARD_INVALID") {
+        return { status: 502, message: "千问没有返回有效的四格分镜，请重新生成。" };
+      } else if (message.startsWith("STORYBOARD_UPSTREAM:")) {
+        return { status: 502, message: `千问分镜失败：${message.slice(20, 320)}` };
+      } else if (message.startsWith("IMAGE_UPSTREAM:")) {
+        return { status: 502, message: `万相四格生成失败：${message.slice(15, 315)}` };
+      } else if (message.startsWith("IMAGE_COUNT:")) {
+        return { status: 502, message: `万相本次只返回了 ${message.slice(12)} 张图片，没有形成完整四格，请重新生成。` };
+      } else if (message === "IMAGE_DOWNLOAD") {
+        return { status: 502, message: "图片已生成，但临时图片下载失败，请重新生成。" };
+      } else if (message === "PAYLOAD_TOO_LARGE") {
+        return { status: 413, message: "故事内容过长，无法生成图片。" };
+      } else if (error instanceof Error && error.name === "TimeoutError") {
+        return { status: 504, message: "故事图片生成超时，请稍后重试。" };
+      }
+      return { status: 502, message: "暂时无法生成故事图片，请稍后重试。" };
 }

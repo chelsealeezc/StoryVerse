@@ -202,7 +202,24 @@ npm run build
 
 ## 部署
 
-推送到 `main` 后，GitHub Actions 会自动运行：
+### 腾讯云国际站（当前推荐）
+
+生产架构为阿里云 ESA Pages → `/api/*` 边缘代理 → SAE → RDS PostgreSQL。详细控制台字段、数据库账户和验收命令见 [docs/aliyun-deployment.md](docs/aliyun-deployment.md)。
+
+后端容器启动时会先使用 `DATABASE_MIGRATOR_URL` 在 PostgreSQL advisory lock 保护下执行 Drizzle migration；成功后才监听端口。正常请求只使用权限较低的 `DATABASE_URL`。边缘 Pages 需要设置：
+
+```dotenv
+BACKEND_API_ORIGIN=https://你的-SAE-HTTPS-地址
+VITE_BASE_PATH=/
+VITE_API_BASE_URL=/api/v1
+VITE_IMAGE_API_URL=/api/generate-image
+```
+
+GitHub Pages 工作流仅保留为手动回退发布，`main` 的正式自动发布目标改为阿里云 ESA Pages。
+
+### 旧 GitHub Pages 回退
+
+需要回退到 GitHub Pages 时，在 Actions 中手动运行旧工作流，它会执行：
 
 ```bash
 npm ci

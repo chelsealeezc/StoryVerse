@@ -1,7 +1,7 @@
 import { emptyDraft } from "./data";
 import type { AppState } from "./types";
 
-const KEY = "storyverse.local.v3";
+const KEY = "storyverse.preferences.v1";
 
 export const initialState: AppState = {
   language: "zh",
@@ -23,20 +23,14 @@ export function loadState(): AppState {
   try {
     const raw = localStorage.getItem(KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    return parsed ? {
-      ...initialState,
-      ...parsed,
-      draft: { ...emptyDraft, ...parsed.draft },
-      draftBox: parsed.draftBox ?? [],
-      language: parsed.language ?? "zh",
-    } : initialState;
+    return parsed ? { ...initialState, language: parsed.language ?? "zh" } : initialState;
   } catch {
     return initialState;
   }
 }
 
 export function saveState(state: AppState) {
-  localStorage.setItem(KEY, JSON.stringify(state));
+  localStorage.setItem(KEY, JSON.stringify({ language: state.language }));
 }
 
 export function resetState() {

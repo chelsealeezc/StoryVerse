@@ -24,6 +24,8 @@ export interface Story {
 }
 
 export interface Draft {
+  id?: string;
+  version?: number;
   guide: string;
   customGuide: string;
   title: string;
@@ -51,6 +53,7 @@ export interface SavedDraft extends Draft {
 }
 
 export interface Analysis {
+  id?: string;
   suggestedTitle: string;
   tags: {
     topic: string[];

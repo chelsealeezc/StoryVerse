@@ -5,29 +5,43 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "tsx watch --env-file=.env.local server/index.ts",
     "build": "tsc -b && vite build && cp dist/index.html dist/404.html",
     "build:image-api": "tsc -p tsconfig.server.json",
-    "start:image-api": "node server/dist/index.js",
+    "start:image-api": "node server/dist/server/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node server/dist/server/migrate.js",
     "preview": "vite preview",
     "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/rate-limit": "^11.2.0",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.17.10",
     "@react-three/postprocessing": "^2.16.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "argon2": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.11.2",
     "gsap": "^3.13.0",
     "lucide-react": "^0.468.0",
+    "pg": "^8.22.0",
     "postprocessing": "^6.36.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.160.1",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@types/pg": "^8.20.4",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.9",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
