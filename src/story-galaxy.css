@@ -1235,3 +1235,64 @@
     display: none;
   }
 }
+
+/* ── 收件箱：审核结果通知 ─────────────────────────────────── */
+.inbox-button { position: relative; }
+.inbox-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ff5b45;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.inbox-dialog { width: min(520px, 92vw); text-align: left; }
+.inbox-list { display: grid; gap: 10px; margin-top: 14px; max-height: 52vh; overflow: auto; }
+.inbox-item {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border-left: 3px solid rgba(255,255,255,0.24);
+  background: rgba(255,255,255,0.06);
+}
+.inbox-item.removed { border-left-color: #ff7a5c; }
+.inbox-item.kept { border-left-color: #95e9ff; }
+.inbox-item b { font-size: 14px; }
+.inbox-item span { font-size: 13px; opacity: .82; }
+.inbox-item p { margin: 4px 0 0; font-size: 12px; line-height: 1.7; opacity: .78; }
+.inbox-item small { font-size: 10px; opacity: .5; }
+
+.storyverse-root[data-theme="day"] .inbox-item {
+  background: rgba(36,27,20,0.05);
+  border-left-color: rgba(36,27,20,0.16);
+}
+
+/* 通知状态标签：待审核 / 审核中 / 已有结果 */
+.inbox-status {
+  justify-self: start;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.inbox-status.is-pending { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.78); }
+.inbox-status.is-reviewing { background: rgba(255,204,35,0.2); color: #ffd873; }
+.inbox-status.is-resolved { background: rgba(149,233,255,0.2); color: #95e9ff; }
+
+.inbox-item.pending { border-left-color: rgba(255,255,255,0.28); }
+.inbox-item.reviewing { border-left-color: #ffcc23; }
+
+.storyverse-root[data-theme="day"] .inbox-status.is-pending { background: rgba(36,27,20,0.1); color: #5c5348; }
+.storyverse-root[data-theme="day"] .inbox-status.is-reviewing { background: #fdf3e3; color: #8a5a1b; }
+.storyverse-root[data-theme="day"] .inbox-status.is-resolved { background: #e2f4fd; color: #0a6f9c; }

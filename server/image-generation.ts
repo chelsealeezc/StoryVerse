@@ -12,6 +12,7 @@ type ImageRequest = {
   mood?: string;
   time?: string;
   stage?: string;
+  gender?: string;
   people?: string[];
   tags?: string[];
 };
@@ -151,6 +152,7 @@ function normalizedInput(input: ImageRequest) {
     mood: clean(input.mood, 40),
     time: clean(input.time, 40),
     stage: clean(input.stage, 40),
+    gender: clean(input.gender, 20),
     people: cleanList(input.people, 8, 30),
     tags: cleanList(input.tags, 12, 30),
   };
@@ -184,6 +186,7 @@ JSON 结构必须为：
 城市：${input.city || "未指定"}
 发生时间：${input.time || "未指定"}
 人生阶段：${input.stage || "未指定"}
+主角性别：${input.gender || "未指定"}
 人物关系：${input.people.join("、") || "未指定"}
 情绪：${input.mood || "未指定"}
 标签：${input.tags.join("、") || "未指定"}`;
@@ -311,6 +314,7 @@ JSON 结构必须为：
 城市：${input.city || "未指定"}
 发生时间：${input.time || "未指定"}
 人生阶段：${input.stage || "未指定"}
+主角性别：${input.gender || "未指定"}
 人物关系：${input.people.join("、") || "未指定"}
 情绪：${input.mood || "未指定"}
 标签：${input.tags.join("、") || "未指定"}`;

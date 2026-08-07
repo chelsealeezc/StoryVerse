@@ -4,10 +4,12 @@ import { Line, OrbitControls, Points, PointMaterial } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import gsap from "gsap";
 import * as THREE from "three";
+import { Tour } from "./Tour";
+import type { InboxMessage } from "./types";
 import "./story-galaxy.css";
 import type { Reaction, Story } from "./types";
 
-type IconName = "compass" | "book" | "tune" | "heart" | "thumbsDown" | "flag" | "plus" | "search" | "x" | "user" | "logout" | "sun" | "moon";
+type IconName = "compass" | "book" | "tune" | "heart" | "thumbsDown" | "flag" | "plus" | "search" | "x" | "user" | "logout" | "sun" | "moon" | "bell";
 type ViewMode = "explore" | "mine" | "resonance" | "liked" | "write";
 type StoryTheme = "city" | "choice" | "family" | "future" | "memory";
 type ThemeMode = "night" | "day";
@@ -177,6 +179,7 @@ function Icon({ name, size = 22 }: { name: IconName; size?: number }) {
     book: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H7a3 3 0 0 0-3 3V5.5Z" /><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /></>,
     tune: <><path d="M4 7h10" /><path d="M18 7h2" /><circle cx="16" cy="7" r="2" /><path d="M4 17h2" /><path d="M10 17h10" /><circle cx="8" cy="17" r="2" /></>,
     heart: <path d="M20.8 8.6c0 5.2-8.8 10.4-8.8 10.4S3.2 13.8 3.2 8.6A4.6 4.6 0 0 1 12 6.7a4.6 4.6 0 0 1 8.8 1.9Z" />,
+    bell: <><path d="M18 8.5a6 6 0 1 0-12 0c0 6-2 7.5-2 7.5h16s-2-1.5-2-7.5Z" /><path d="M13.7 20a2 2 0 0 1-3.4 0" /></>,
     thumbsDown: <><path d="M10 15v4a3 3 0 0 0 3 3l4-9V3H5.7A2 2 0 0 0 3.8 4.4L2.4 9.4A2 2 0 0 0 4.3 12H10" /><path d="M17 3h2.5A2.5 2.5 0 0 1 22 5.5v5A2.5 2.5 0 0 1 19.5 13H17" /></>,
     flag: <><path d="M5 21V4" /><path d="M5 4c4-2 6 2 10 0v10c-4 2-6-2-10 0" /></>,
     plus: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
@@ -388,15 +391,17 @@ function AnimationTimeline({ galaxyRef, disabled }: { galaxyRef: MutableRefObjec
   return null;
 }
 
-function GalaxyScene({ activeView, selected, onSelect, zoom, themeMode, resonance, nodes }: { activeView: ViewMode; selected: StoryNodeData | null; onSelect: (node: StoryNodeData | null) => void; zoom: number; themeMode: ThemeMode; resonance: ResonanceSelection; nodes: StoryNodeData[] }) {
+function GalaxyScene({ activeView, selected, onSelect, zoom, themeMode, resonance, nodes, removedIds }: { activeView: ViewMode; selected: StoryNodeData | null; onSelect: (node: StoryNodeData | null) => void; zoom: number; themeMode: ThemeMode; resonance: ResonanceSelection; nodes: StoryNodeData[]; removedIds: string[] }) {
   const galaxyRef = useRef<THREE.Group | null>(null);
   const controlsRef = useRef<any>(null);
   const visibleNodes = useMemo(() => {
-    const resonantNodes = nodes.map((node) => applyResonanceToNode(node, resonance));
+    // 被管理员下架的故事，那颗星直接从星图上消失
+    const live = nodes.filter((node) => !removedIds.includes(node.id));
+    const resonantNodes = live.map((node) => applyResonanceToNode(node, resonance));
     if (activeView === "mine") return resonantNodes.filter((node) => node.mine);
     if (activeView === "liked") return resonantNodes.filter((node) => node.liked);
     return resonantNodes;
-  }, [activeView, resonance, nodes]);
+  }, [activeView, resonance, nodes, removedIds]);
 
   return (
     <Canvas camera={{ position: [0, 0.62, 10.25], fov: 53 }} dpr={[1, 1.6]} gl={{ antialias: true, alpha: false }}>
@@ -526,7 +531,7 @@ function FloatingMenu({ activeView, language, onChange }: { activeView: ViewMode
   return (
     <nav aria-label="StoryVerse star map navigation" className="floating-nav">
       {navItems.map((item) => (
-        <button key={item.id} className={`neon-control dock-item ${activeView === item.id ? "is-active" : ""}`} onClick={() => onChange(item.id)}>
+        <button key={item.id} data-tour={`nav-${item.id}`} className={`neon-control dock-item ${activeView === item.id ? "is-active" : ""}`} onClick={() => onChange(item.id)}>
           <span className="nav-icon"><Icon name={item.icon} /></span>
           <span className="nav-label">{language === "zh" ? item.zh : item.en}</span>
         </button>
@@ -565,16 +570,62 @@ function ResonanceBar({
   );
 }
 
-function AccountDock({ language, onLogout }: { language: "zh" | "en"; onLogout: () => void }) {
+function AccountDock({ language, onLogout, inbox, onReadInbox }: { language: "zh" | "en"; onLogout: () => void; inbox: InboxMessage[]; onReadInbox: () => void }) {
   const t = galaxyCopy[language];
   const [accountOpen, setAccountOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const unread = inbox.filter(message => !message.read).length;
+  const zh = language === "zh";
   return (
     <>
-      <div className="account-dock">
+      <div className="account-dock" data-tour="account-dock">
         <button onClick={() => setAccountOpen(true)}><Icon name="user" size={18} /><span>{t.account}</span></button>
+        <button
+          className="inbox-button"
+          aria-label={zh ? "消息" : "Inbox"}
+          onClick={() => { setInboxOpen(true); onReadInbox(); }}
+        >
+          <Icon name="bell" size={18} />
+          {unread > 0 && <i className="inbox-dot">{unread}</i>}
+        </button>
         <button aria-label={t.logout} onClick={onLogout}><Icon name="logout" size={18} /></button>
       </div>
       {accountOpen && <AccountDialog language={language} onClose={() => setAccountOpen(false)} />}
+      {inboxOpen && (
+        <div className="galaxy-modal-backdrop" onMouseDown={event => event.target === event.currentTarget && setInboxOpen(false)}>
+          <article className="galaxy-dialog inbox-dialog">
+            <button className="galaxy-dialog-close" onClick={() => setInboxOpen(false)}><Icon name="x" size={18} /></button>
+            <p className="galaxy-dialog-eyebrow">Inbox</p>
+            <h2>{zh ? "我的消息" : "My messages"}</h2>
+            {inbox.length === 0 && <p>{zh ? "还没有消息。故事被审核处理后，结果会出现在这里。" : "Nothing yet. Review outcomes for your stories will land here."}</p>}
+            <div className="inbox-list">
+              {inbox.map(message => {
+                const statusLabel = message.status === "pending" ? (zh ? "待审核" : "Pending review")
+                  : message.status === "reviewing" ? (zh ? "审核中" : "In review")
+                  : (zh ? "已有结果" : "Reviewed");
+                const headline = message.status !== "resolved"
+                  ? (zh ? "故事已提交人工审核" : "Sent to human review")
+                  : message.kind === "removed" ? (zh ? "故事已下架" : "Story removed") : (zh ? "故事已保留" : "Story kept");
+                const hint = message.status === "pending"
+                  ? (zh ? "排队等待审核人员查看，通常一两天内会有结果。" : "Queued for a reviewer. Usually a day or two.")
+                  : message.status === "reviewing"
+                    ? (zh ? "审核人员正在看这条故事。" : "A reviewer is reading it right now.")
+                    : "";
+                return (
+                  <div className={`inbox-item ${message.status === "resolved" ? message.kind : message.status}`} key={message.id}>
+                    <span className={`inbox-status is-${message.status}`}>{statusLabel}</span>
+                    <b>{headline}</b>
+                    <span>{message.storyTitle}</span>
+                    {hint && <p>{hint}</p>}
+                    {message.reason && <p>{zh ? "原因：" : "Reason: "}{message.reason}</p>}
+                    <small>{new Date(message.createdAt).toLocaleString(zh ? "zh-CN" : "en-US")}</small>
+                  </div>
+                );
+              })}
+            </div>
+          </article>
+        </div>
+      )}
     </>
   );
 }
@@ -640,6 +691,7 @@ function GalaxyReportDialog({ language, node, onClose, onSubmit }: { language: "
             <div className="galaxy-confirm-card"><span>{node.label}</span><b>{reason}</b>{note && <p>{note}</p>}</div>
             <div className="galaxy-dialog-actions">
               <button onClick={() => setConfirm(false)}>{t.reportBack}</button>
+              {/* 上游的 onSubmit 会 POST /stories/:id/reports；本地审核台的队列在 App 里同步追加 */}
               <button className="danger" onClick={() => { void (onSubmit?.(node.id,reason,note) ?? Promise.resolve()).then(() => setDone(true)); }}>{t.reportSubmit}</button>
             </div>
           </>
@@ -664,6 +716,12 @@ export function StoryGalaxy({
   reactions = {},
   onReact,
   onReport,
+  showTour = false,
+  onTourFinish,
+  onTourSkip,
+  removedNodeIds = [],
+  inbox = [],
+  onReadInbox,
 }: {
   language: "zh" | "en";
   themeMode: ThemeMode;
@@ -679,6 +737,13 @@ export function StoryGalaxy({
   reactions?: Record<string, Reaction>;
   onReact?: (storyId: string, reaction: Reaction) => void;
   onReport?: (storyId: string, reason: string, note: string) => Promise<void>;
+  showTour?: boolean;
+  onTourFinish?: () => void;
+  onTourSkip?: () => void;
+  /** 被管理员下架的星点 id，星图上直接不画 */
+  removedNodeIds?: string[];
+  inbox?: InboxMessage[];
+  onReadInbox?: () => void;
 }) {
   const [activeView, setActiveView] = useState<ViewMode>("explore");
   const [selected, setSelected] = useState<StoryNodeData | null>(null);
@@ -731,17 +796,17 @@ export function StoryGalaxy({
 
   return (
     <main className="storyverse-root" data-theme={themeMode} onWheel={handleWheel}>
-      <GalaxyScene activeView={activeView} selected={selected} onSelect={setSelected} zoom={zoom} themeMode={themeMode} resonance={confirmedResonance} nodes={nodes} />
+      <GalaxyScene activeView={activeView} selected={selected} onSelect={setSelected} zoom={zoom} themeMode={themeMode} resonance={confirmedResonance} nodes={nodes} removedIds={removedNodeIds} />
       <div className="meteor meteor-one" />
       <div className="meteor meteor-two" />
       <div className="meteor meteor-three" />
       <header className="top-overlay">
         <button className="brand brand-button" onClick={onHome} aria-label={language === "zh" ? "回到首页" : "Back home"}><span>Story</span>Verse</button>
-        <div className="header-actions">
+        <div className="header-actions" data-tour="top-controls">
           <button className="neon-control theme-button" aria-label={t.theme} onClick={() => onThemeModeChange(themeMode === "night" ? "day" : "night")}>
             <Icon name={themeMode === "night" ? "sun" : "moon"} size={20} />
           </button>
-          <button className="neon-control lang-button" aria-label={t.language} onClick={() => onLanguageChange(language === "zh" ? "en" : "zh")}>
+          <button className="neon-control lang-button" data-tour="lang-button" aria-label={t.language} onClick={() => onLanguageChange(language === "zh" ? "en" : "zh")}>
             <span className={language === "zh" ? "lang-primary" : "lang-secondary"}>中文</span>
             <span className="lang-divider" />
             <span className={language === "en" ? "lang-primary" : "lang-secondary"}>ENG</span>
@@ -752,8 +817,20 @@ export function StoryGalaxy({
       <p className="bottom-legend">{t.legend}</p>
       {selected && <StoryPanel node={selected} language={language} onClose={() => setSelected(null)} onReact={onReact} onReport={onReport} />}
       {activeView === "resonance" && <ResonanceBar language={language} value={draftResonance} onChange={setDraftResonance} onConfirm={confirmResonance} />}
-      <AccountDock language={language} onLogout={onLogout ?? onHome} />
+      <AccountDock language={language} onLogout={onLogout ?? onHome} inbox={inbox} onReadInbox={() => onReadInbox?.()} />
       <FloatingMenu activeView={activeView} language={language} onChange={handleViewChange} />
+      {/*
+        大厅是整条引导的终点：走完就停在大厅让用户自己逛，不要再跳去写故事。
+        （这里以前会调 onWrite()，那是大厅还排在流程最前面时的衔接方式。）
+      */}
+      {showTour && (
+        <Tour
+          scene="lobby"
+          language={language}
+          onFinish={() => onTourFinish?.()}
+          onSkip={() => onTourSkip?.()}
+        />
+      )}
     </main>
   );
 }

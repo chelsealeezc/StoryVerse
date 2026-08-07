@@ -16,8 +16,21 @@ import { initialState, loadState, saveState } from "./storage";
 import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from "./offline-drafts";
 import { Auragate as PrototypeGateway } from "./PrototypeGateway";
 import { StoryGalaxy } from "./StoryGalaxy";
+import { Tour } from "./Tour";
+import { AdminConsole } from "./AdminConsole";
+import { moderateStory, moderationCopy } from "./moderation";
+import type { ModerationResult } from "./moderation";
 import type { PlaceSuggestion } from "./places";
-import type { AppState, Draft, Language, Reaction, ResonanceMode, Story } from "./types";
+import type { TourSceneId } from "./tour-steps";
+import type { AppState, Draft, InboxMessage, Language, Reaction, ResonanceMode, ReviewItem, Story } from "./types";
+import "./tour.css";
+
+/** 引导相关的三个回调在 Wizard / Resonance 之间是同一组，抽出来少写几遍 */
+interface TourProps {
+  tourActive: (scene: TourSceneId) => boolean;
+  onTourFinish: (scene: TourSceneId) => void;
+  onTourSkip: (scene: TourSceneId) => void;
+}
 
 type ThemeMode = "day" | "night";
 
@@ -55,6 +68,7 @@ const routeMap = {
   resonance: "/Resonance",
   recommendations: "/Recommendations",
   starLobby: "/StarLobby",
+  admin: "/Admin",
 } as const;
 const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -76,6 +90,7 @@ function routePatchFromPath(pathname = window.location.pathname): Partial<AppSta
   if (path === routeMap.resonance) return { screen: "resonance" };
   if (path === routeMap.recommendations) return { screen: "recommendations" };
   if (path === routeMap.starLobby) return { screen: "atlas" };
+  if (path === routeMap.admin) return { screen: "admin" };
   return { screen: "intro", gatewaySection: "intro" };
 }
 
@@ -86,6 +101,7 @@ function pathFromState(state: AppState, gatewaySection: "intro" | "preview" | "a
   if (state.screen === "resonance") return routeMap.resonance;
   if (state.screen === "recommendations") return routeMap.recommendations;
   if (state.screen === "atlas") return routeMap.starLobby;
+  if (state.screen === "admin") return routeMap.admin;
   void gatewaySection;
   void authMode;
   return routeMap.intro;
@@ -105,6 +121,8 @@ const copy = {
     yourStory: "你的故事", count: "建议 100–1500 字", gentleTip: "这段记忆已经有了开头。再多写一点细节，AI 会更容易理解它。",
     restTip: "需要休息一下吗？你的草稿已自动保存。", mood: "写完后的感受", occurred: "故事发生在", city: "城市",
     lifeStage: "当时的人生阶段", people: "故事里有谁？", multi: "可多选", prev: "上一步", ai: "故事写好了",
+    gender: "性别", genderPick: "请选择", genderMale: "男", genderFemale: "女", genderOther: "其他",
+    genderOtherHint: "选择「其他」时，AI生图可能无法准确呈现人物形象哦。", genderOtherNote: "只是建议，可以忽略",
     pasteTitle: "这是你以前写的内容吗？可以选择其他输入方式哦。", pasteYes: "是", pasteOther: "尝试别的输入方式",
     leaveTitle: "你的故事尚未完成，是否保存草稿？", saveDraft: "保存草稿", leaveAnyway: "直接离开", keepWriting: "继续写",
     finalSay: "你的故事页面", confirmTitle: "确认后，它会成为 StoryVerse 里的一颗星。", storyTitle: "故事标题", editBody: "修改正文", doneEdit: "完成修改",
@@ -128,6 +146,8 @@ const copy = {
     yourStory: "Your story", count: "Suggested 100-1500 words", gentleTip: "This memory has a beginning. Add a few details so AI can understand it better.",
     restTip: "Need a pause? Your draft has been saved.", mood: "How you feel after writing", occurred: "When it happened", city: "City",
     lifeStage: "Life stage then", people: "Who is in the story?", multi: "Multiple", prev: "Previous", ai: "Let AI organize",
+    gender: "Gender", genderPick: "Please choose", genderMale: "Male", genderFemale: "Female", genderOther: "Other",
+    genderOtherHint: "With “Other”, the AI may not portray the character accurately in the generated image.", genderOtherNote: "Just a suggestion — feel free to ignore",
     pasteTitle: "Is this something you wrote before? You can choose another input method.", pasteYes: "Yes", pasteOther: "Try another input method",
     leaveTitle: "Your story is not finished. Save it as a draft?", saveDraft: "Save draft", leaveAnyway: "Leave anyway", keepWriting: "Keep writing",
     finalSay: "Step 4 · The final say is yours", confirmTitle: "Confirm your story star.", storyTitle: "Story title", editBody: "Edit body", doneEdit: "Done editing",
@@ -636,13 +656,93 @@ function CityField({ draft, setDraft, label }: { draft: Draft; setDraft: (patch:
   );
 }
 
-function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChange }: {
-  state: AppState; update: AppUpdate; onPublished: (draft: Draft, analysis: NonNullable<AppState["analysis"]>) => Promise<void>; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void;
+/**
+ * 性别选择。第二步和第四步共用同一个组件，选项文案跟随语言，
+ * 但存进 draft 的值固定是中文（男 / 女 / 其他），这样切换语言不会把已选的值弄丢，
+ * 传给生图接口的取值也保持稳定。
+ */
+const GENDER_KEYS = [
+  { value: "男", label: "genderMale" },
+  { value: "女", label: "genderFemale" },
+  { value: "其他", label: "genderOther" },
+] as const;
+
+function GenderField({ draft, setDraft, t, wide }: {
+  draft: Draft;
+  setDraft: (patch: Partial<Draft>) => void;
+  t: typeof copy["zh"] | typeof copy["en"];
+  wide?: boolean;
 }) {
+  return (
+    <label className={wide ? "field-wide" : undefined}>
+      <span className="field-name">{t.gender} <small>{t.optional}</small></span>
+      <select value={draft.gender} onChange={event => setDraft({ gender: event.target.value })}>
+        <option value="">{t.genderPick}</option>
+        {GENDER_KEYS.map(option => <option key={option.value} value={option.value}>{t[option.label]}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/**
+ * 管理端登录。刻意做成独立页面而不是塞进 PrototypeGateway ——
+ * 那个文件上游改得很频繁，动它每次同步都要解冲突。
+ *
+ * 注意：这是纯前端的演示门禁，任何知道 /Admin 的人改一下 localStorage 就能进，
+ * 不构成任何真实的权限控制。真正的角色校验必须放在后端。
+ */
+function AdminGate({ language, themeMode, onBack, onSignedIn, onThemeModeChange }: {
+  language: Language; themeMode: ThemeMode; onBack: () => void; onSignedIn: () => void; onThemeModeChange: (theme: ThemeMode) => void;
+}) {
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [error, setError] = useState(false);
+  const zh = language === "zh";
+
+  const submit = () => {
+    if (user.trim() === "admin" && pass === "admin123") { onSignedIn(); return; }
+    setError(true);
+  };
+
+  return (
+    <main className={`admin-gate ${themeMode === "night" ? "theme-night admin-universe" : "admin-sky"}`}>
+      <div className="admin-gate-card">
+        <button className="admin-gate-theme" aria-label={zh ? "切换主题" : "Switch theme"} onClick={() => onThemeModeChange(themeMode === "night" ? "day" : "night")}>
+          {themeMode === "night" ? "☀" : "☾"}
+        </button>
+        <button className="admin-gate-back" onClick={onBack}>← {zh ? "返回 StoryVerse" : "Back to StoryVerse"}</button>
+        <h1>{zh ? "内容审核台" : "Moderation desk"}</h1>
+        <p>{zh ? "仅供审核人员使用。登录后可以处理被举报、机器不确定与申诉的故事。" : "For reviewers only. Sign in to handle reported, uncertain and appealed stories."}</p>
+        <label><span>{zh ? "工号" : "Staff ID"}</span>
+          <input value={user} onChange={e => { setUser(e.target.value); setError(false); }} placeholder="admin" />
+        </label>
+        <label><span>{zh ? "密码" : "Password"}</span>
+          <input type="password" value={pass} onChange={e => { setPass(e.target.value); setError(false); }} placeholder="admin123" />
+        </label>
+        {error && <em className="admin-gate-error">{zh ? "工号或密码不对。" : "Wrong staff ID or password."}</em>}
+        <button className="admin-gate-submit" onClick={submit}>{zh ? "进入审核台" : "Enter the desk"}</button>
+        <p className="admin-gate-demo">
+          {zh ? "演示账号：admin / admin123 —— 这是纯前端门禁，不是真实权限控制。" : "Demo credentials: admin / admin123 — front-end only, not real access control."}
+        </p>
+      </div>
+    </main>
+  );
+}
+
+function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChange, tourActive, onTourFinish, onTourSkip }: {
+  state: AppState; update: AppUpdate; onPublished: (draft: Draft, analysis: NonNullable<AppState["analysis"]>) => Promise<void>; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void;
+} & TourProps) {
   const step = state.wizardStep;
   const draft = state.draft;
   const language = state.language;
   const t = copy[language];
+  /* 步骤 → 引导场景。第 2 步是 AI 整理的等待页，按需求不做引导。 */
+  const sceneForStep: Record<number, TourSceneId | undefined> = { 0: "guide", 1: "collection", 3: "confirm" };
+  const candidateScene = sceneForStep[step];
+  // 第 4 步要等 analysis 出来、内容真正渲染了才有目标可高亮
+  const wizardTourScene = candidateScene && tourActive(candidateScene) && (step !== 3 || !!state.analysis)
+    ? candidateScene
+    : null;
   const [analysisStage, setAnalysisStage] = useState(0);
   const [focusMode, setFocusMode] = useState(false);
   const [idlePromptIndex, setIdlePromptIndex] = useState(0);
@@ -652,6 +752,8 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const [leaveTarget, setLeaveTarget] = useState<number | null>(null);
   const [editingBody, setEditingBody] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [moderation, setModeration] = useState<ModerationResult | null>(null);
+  const [appealNote, setAppealNote] = useState("");
   const [tagDrafts, setTagDrafts] = useState<Record<string, string[]>>({});
   const [imageStyle, setImageStyle] = useState<ImageStyle>("minimal-realistic");
   const [storyImage, setStoryImage] = useState("");
@@ -791,6 +893,61 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const canContinueCollection = missingCollection.length === 0;
   const canContinueGuide = !!draft.guide && (draft.guide !== "other" || draft.customGuide.trim().length >= 2);
   const savedTime = draft.savedAt ? new Date(draft.savedAt).toLocaleTimeString(language === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" }) : "";
+  const mCopy = moderationCopy[language];
+
+  /*
+   * 发布前的安全检查。命中就弹柔和提示，不直接说「违规」，并且永远留一条
+   * 「仍然提交」的路 —— 提交后进人工审核区，由管理员决定。没命中就直接发布。
+   */
+  /** 真正调用上游的发布接口（POST /stories/publish），带上标签与错误处理 */
+  const runPublish = () => {
+    setPublishing(true); setPublishError("");
+    return onPublished(draft, { ...state.analysis!, tags: { ...state.analysis!.tags, ...tagDrafts } })
+      .catch(error => { setPublishError(error instanceof Error ? error.message : "发布失败，请稍后重试。"); })
+      .finally(() => setPublishing(false));
+  };
+
+  const attemptPublish = () => {
+    const result = moderateStory(draft.body);
+    if (result.flags.length === 0) { void runPublish(); return; }
+    setModeration(result);
+  };
+
+  const sendToReview = (bucket: "uncertain" | "appealed") => {
+    const title = draft.title || state.analysis?.suggestedTitle || "未命名故事";
+    const item: ReviewItem = {
+      // 别截断 UUID：切成 8 位只剩 32 bit，几万条就会开始撞
+      id: `rv-${crypto.randomUUID()}`,
+      title,
+      body: draft.body,
+      tags: Object.values(tagDrafts).flat().length ? Object.values(tagDrafts).flat() : Object.values(state.analysis?.tags ?? {}).flat(),
+      author: language === "zh" ? "我（本机演示）" : "Me (local demo)",
+      city: draft.city,
+      createdAt: Date.now(),
+      bucket,
+      status: "pending",
+      flags: moderation?.flags,
+      appealNote: bucket === "appealed" ? appealNote.trim() || undefined : undefined,
+      mine: true,
+    };
+    // 进队列的同时给作者一条「待审核」通知，后续状态由管理端推进
+    const notice: InboxMessage = {
+      id: `msg-${item.id}`,
+      status: "pending",
+      kind: "flagged",
+      storyTitle: title,
+      reason: "",
+      createdAt: Date.now(),
+      read: false,
+    };
+    update(previous => ({
+      reviewQueue: [item, ...previous.reviewQueue],
+      inbox: [notice, ...previous.inbox],
+    }));
+    setModeration(null);
+    setAppealNote("");
+    void runPublish();
+  };
   const showCityHint = !!hints.city && hints.city.name !== draft.city;
   const showAgeHint = hints.age !== null && String(hints.age) !== draft.age;
   const presetTags: Record<string, string[]> = {
@@ -874,8 +1031,10 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
                     <span>岁</span>
                   </div>
                 </label>
+                <GenderField draft={draft} setDraft={setDraft} t={t} />
                 {(draft.time === "小时候" || draft.time === "很久以前") && <label className="field-wide"><span className="field-name">{t.lifeStage}</span><select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">请选择</option>{["童年", "中学", "大学", "青年探索", "初入职场", "成年回望"].map(x => <option key={x}>{x}</option>)}</select></label>}
               </div>
+              {draft.gender === "其他" && <p className="gender-hint">{t.genderOtherHint}<small>{t.genderOtherNote}</small></p>}
               {(showCityHint || showAgeHint) && (
                 <div className="ai-hint">
                   <Sparkles size={15} /><span>AI 从你的文字里读到：</span>
@@ -942,7 +1101,9 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
               <label><span className="field-name">时间</span><select value={draft.time} onChange={e => setDraft({ time: e.target.value })}><option value="">请选择</option>{["今天", "最近一年", "小时候", "很久以前", "不确定"].map(x => <option key={x}>{x}</option>)}</select></label>
               <CityField draft={draft} setDraft={setDraft} label="地点" />
               <label><span className="field-name">人生阶段</span><select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">请选择</option>{["童年", "中学", "大学", "青年探索", "初入职场", "成年回望"].map(x => <option key={x}>{x}</option>)}</select></label>
+              <GenderField draft={draft} setDraft={setDraft} t={t} wide />
             </div>
+            {draft.gender === "其他" && <p className="gender-hint">{t.genderOtherHint}<small>{t.genderOtherNote}</small></p>}
             <article className="story-preview editable-preview"><div className="preview-head"><h2>{draft.title || state.analysis.suggestedTitle}</h2><button onClick={() => setEditingBody(!editingBody)}>{editingBody ? t.doneEdit : t.editBody}</button></div>{editingBody ? <textarea value={draft.body} onChange={e => setDraft({ body: e.target.value, edits: draft.edits + 1 })} /> : <p>{draft.body}</p>}</article>
           </div>
           <div className="tag-editor">
@@ -985,22 +1146,54 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
             </div>
             <div className="publish-note"><Check size={17} />确认后将进入模拟安全检查，并匿名加入故事池。</div>
             {publishError && <p className="api-error" role="alert">{publishError}</p>}
-            <PrimaryButton disabled={publishing} onClick={() => {
-              setPublishing(true); setPublishError("");
-              void onPublished(draft, { ...state.analysis!, tags: { ...state.analysis!.tags, ...tagDrafts } }).catch(error => {
-                setPublishError(error instanceof Error ? error.message : "发布失败，请稍后重试。");
-              }).finally(() => setPublishing(false));
-            }}>{publishing ? "正在发布…" : t.publish}</PrimaryButton>
+            <PrimaryButton disabled={publishing} onClick={attemptPublish}>{publishing ? "正在发布…" : t.publish}</PrimaryButton>
           </div>
         </section>
       )}
+      {moderation && (
+        <div className="modal-backdrop">
+          <div className="report-dialog moderation-dialog">
+            {moderation.flags.map(flag => (
+              <div className="moderation-block" key={flag}>
+                <h2>{mCopy[flag].title}</h2>
+                <p>{mCopy[flag].body}</p>
+              </div>
+            ))}
+            {moderation.samples.length > 0 && (
+              <div className="moderation-samples">
+                <span>{mCopy.detected}</span>
+                {moderation.samples.map((sample, i) => <code key={i}>{sample}</code>)}
+              </div>
+            )}
+            <label className="moderation-appeal">
+              <span className="field-name">{mCopy.appeal}</span>
+              <input value={appealNote} placeholder={mCopy.appealPlaceholder} onChange={e => setAppealNote(e.target.value)} />
+            </label>
+            <p className="moderation-note">{mCopy.submitNote}</p>
+            <div className="dialog-actions three">
+              <button className="button button-ghost" onClick={() => { setModeration(null); setAppealNote(""); }}>{mCopy.revise}</button>
+              <button className="button button-ghost" onClick={() => sendToReview("appealed")}>{mCopy.appeal}</button>
+              <button className="button button-primary" onClick={() => sendToReview("uncertain")}>{mCopy.submit}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {pasteDialog && <div className="modal-backdrop"><div className="report-dialog"><h2>{t.pasteTitle}</h2><div className="dialog-actions"><button className="button button-ghost" onClick={() => setPasteDialog(false)}>{t.pasteYes}</button><button className="button button-primary" onClick={() => setPasteDialog(false)}>{t.pasteOther}</button></div></div></div>}
       {leaveTarget !== null && <div className="modal-backdrop"><div className="report-dialog"><h2>{t.leaveTitle}</h2><div className="dialog-actions three"><button className="button button-ghost" onClick={() => setLeaveTarget(null)}>{t.keepWriting}</button><button className="button button-ghost" onClick={() => confirmLeave(false)}>{t.leaveAnyway}</button><button className="button button-primary" onClick={() => confirmLeave(true)}>{t.saveDraft}</button></div></div></div>}
+      {/* 第 3 步（AI 整理）按需求不做引导，所以这里只有 0 / 1 / 3 三个场景 */}
+      {wizardTourScene && !pasteDialog && leaveTarget === null && (
+        <Tour
+          scene={wizardTourScene}
+          language={state.language}
+          onFinish={onTourFinish}
+          onSkip={onTourSkip}
+        />
+      )}
     </main>
   );
 }
 
-function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThemeModeChange }: { state: AppState; update: AppUpdate; onBack: () => void; onContinue: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void }) {
+function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThemeModeChange, tourActive, onTourFinish, onTourSkip }: { state: AppState; update: AppUpdate; onBack: () => void; onContinue: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void } & TourProps) {
   const t = copy[state.language];
   const dimensions = [
     { key: "city" as const, title: state.language === "zh" ? "城市" : "City", icon: "⌖", similar: state.language === "zh" ? "遇见来自相近城市语境的故事" : "Meet stories from a similar city context", different: state.language === "zh" ? "走进另一座城市的生活经验" : "Step into life in another city" },
@@ -1025,6 +1218,10 @@ function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThe
         </article>)}
       </section>
       <div className="resonance-action"><PrimaryButton onClick={onContinue}>{t.findStories}</PrimaryButton><small>{state.language === "zh" ? "随时可以在主页修改" : "You can adjust this anytime on the home page."}</small></div>
+      {/* 引导的最后一站：走完这里整条引导就结束（见 App 里的 finishTour） */}
+      {tourActive("resonance") && (
+        <Tour scene="resonance" language={state.language} onFinish={onTourFinish} onSkip={onTourSkip} />
+      )}
     </main>
   );
 }
@@ -1180,7 +1377,17 @@ function Atlas({ state, update, onWrite, onHome }: { state: AppState; update: Ap
 
 export default function App() {
   const initialRoute = typeof window !== "undefined" ? routePatchFromPath() : {};
-  const [state, setState] = useState<AppState>(() => ({ ...loadState(), ...initialRoute }));
+  const [state, setState] = useState<AppState>(() => {
+    const loaded = { ...loadState(), ...initialRoute };
+    /*
+     * 加 ?tour=1 可以把新手引导重新打开一次，方便演示和回归验证。
+     * 引导一旦看完或跳过就永久关闭，否则想再看一遍只能去清 localStorage。
+     */
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("tour")) {
+      return { ...loaded, tour: { enabled: true, seen: [] } };
+    }
+    return loaded;
+  });
   const [gatewaySection, setGatewaySection] = useState<"intro" | "preview" | "auth">(() => initialRoute.gatewaySection ?? "intro");
   const [authMode, setAuthMode] = useState<"signup" | "login">(() => initialRoute.authMode ?? "signup");
   const [themeMode, setThemeMode] = useState<ThemeMode>("day");
@@ -1248,6 +1455,39 @@ export default function App() {
   }, [state.screen, state.wizardStep, gatewaySection, authMode]);
   const go = (screen: string) => update({ screen });
   const goHome = () => { setGatewaySection("intro"); update({ screen: "intro", onboarded: false }); };
+
+  /*
+   * 管理员做完决定：更新队列状态；下架时把对应的星点记下来（星图会过滤掉），
+   * 并且只有作者本人的故事才往收件箱推通知。
+   */
+  const decideReview = (item: ReviewItem, keep: boolean, reason: string, message: InboxMessage) => {
+    update(previous => ({
+      reviewQueue: previous.reviewQueue.map(entry =>
+        entry.id === item.id
+          ? { ...entry, status: keep ? "kept" as const : "removed" as const, removalReason: keep ? undefined : reason }
+          : entry),
+      // 已有同一条故事的通知就就地改成「已有结果」，没有才新插一条
+      inbox: !item.mine
+        ? previous.inbox
+        : previous.inbox.some(m => m.id === `msg-${item.id}`)
+          ? previous.inbox.map(m => m.id === `msg-${item.id}`
+              ? { ...m, status: "resolved" as const, kind: message.kind, reason: message.reason, createdAt: message.createdAt, read: false }
+              : m)
+          : [message, ...previous.inbox],
+    }));
+  };
+
+  /** 审核人员打开某条 → 队列里标记为「审核中」，作者那边的通知同步跟进 */
+  const openReview = (item: ReviewItem) => {
+    update(previous => ({
+      reviewQueue: previous.reviewQueue.map(entry =>
+        entry.id === item.id && !entry.opened ? { ...entry, opened: true } : entry),
+      inbox: !item.mine ? previous.inbox : previous.inbox.map(m =>
+        m.id === `msg-${item.id}` && m.status === "pending"
+          ? { ...m, status: "reviewing" as const, read: false }
+          : m),
+    }));
+  };
   const startNewStory = () => update(previous => {
     const shouldArchive = previous.draft.body.trim() || previous.draft.title.trim();
     return {
@@ -1275,16 +1515,73 @@ export default function App() {
     const [cloudDraft,resonance,storyList,mine] = await Promise.all([api.currentDraft(),api.getResonance(),api.stories(),api.mine()]);
     setCloudStories(storyList);
     setMineIds(mine.map(story => story.id));
-    update({ onboarded: true, accountCreated: true, screen: cloudDraft ? "wizard" : state.firstStoryComplete ? "atlas" : "wizard", ...(cloudDraft ? { draft: { ...initialState.draft, ...cloudDraft } } : {}), resonance });
+    /*
+     * 注册 ＝ 全新账号：重开新手引导，并强制回到第一步。
+     * 不重置的话，浏览器里残留的 tour.enabled=false / firstStoryComplete=true
+     * 会让新注册的人看不到引导、或者直接掉进星空大厅 —— 而大厅按设计是最后一站。
+     * 登录保持上游原逻辑（有云端草稿就续写）。
+     */
+    const signup = input.mode === "signup";
+    update({
+      onboarded: true,
+      accountCreated: true,
+      screen: cloudDraft ? "wizard" : signup ? "wizard" : state.firstStoryComplete ? "atlas" : "wizard",
+      ...(cloudDraft ? { draft: { ...initialState.draft, ...cloudDraft } } : {}),
+      ...(signup ? { tour: { enabled: true, seen: [] }, firstStoryComplete: false, analysis: null, wizardStep: 0 } : {}),
+      resonance,
+    });
   };
 
+  /*
+   * 新手引导的调度。每个场景只在「引导还开着」且「这个场景没播过」时出现，
+   * 所以用户往回退一步不会被同一段引导再拦一次。
+   *
+   * 「跳过本页」只把当前场景标记成看过，后面的页面照常播 —— 在第一步嫌啰嗦
+   * 而跳过，不该连带失去后面所有页面的引导。整条引导只在走完最后一站
+   * （星空大厅）时才真正关闭。
+   */
+  const tourSeen = (scene: TourSceneId) => state.tour.seen.includes(scene);
+  const tourActive = (scene: TourSceneId) => state.tour.enabled && !tourSeen(scene);
+  const markSeen = (previous: AppState, scene: TourSceneId, done: boolean) => ({
+    tour: {
+      enabled: done ? false : previous.tour.enabled,
+      seen: previous.tour.seen.includes(scene) ? previous.tour.seen : [...previous.tour.seen, scene],
+    },
+  });
+  // 大厅是流程的最后一站，走完＝整条引导结束
+  const finishTour = (scene: TourSceneId) => update(previous => markSeen(previous, scene, scene === "lobby"));
+  const skipTour = (scene: TourSceneId) => update(previous => markSeen(previous, scene, false));
+
   let content: React.ReactNode;
-  if (["intro", "icebreaker", "preview", "auth"].includes(state.screen)) {
+  if (state.screen === "admin") {
+    content = state.isAdmin
+      ? <AdminConsole
+          language={state.language}
+          themeMode={themeMode}
+          queue={state.reviewQueue}
+          onDecide={decideReview}
+          onOpen={openReview}
+          // 退出只清管理员身份，screen 仍是 admin，于是落回管理员登录页
+          onLogout={() => update({ isAdmin: false })}
+          onResetDemo={() => update({ reviewQueue: initialState.reviewQueue, inbox: [] })}
+          onLanguageChange={language => update({ language })}
+          onThemeModeChange={setThemeMode}
+        />
+      : <AdminGate
+          language={state.language}
+          themeMode={themeMode}
+          onBack={() => update({ screen: "intro" })}
+          onSignedIn={() => update({ isAdmin: true })}
+          onThemeModeChange={setThemeMode}
+        />;
+  }
+  else if (["intro", "icebreaker", "preview", "auth"].includes(state.screen)) {
     content = <PrototypeGateway
       language={state.language}
       onLanguageChange={language => update({ language })}
       onHome={goHome}
       onComplete={completeAuth}
+      onAdmin={() => update({ screen: "admin" })}
       section={gatewaySection}
       authMode={authMode}
       onAuthModeChange={setAuthMode}
@@ -1293,8 +1590,8 @@ export default function App() {
       onThemeModeChange={setThemeMode}
     />;
   }
-  else if (state.screen === "wizard") content = <Wizard state={state} update={update} onPublished={publishStory} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
-  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => { void api.saveResonance(state.resonance).then(() => go("recommendations")); }} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
+  else if (state.screen === "wizard") content = <Wizard state={state} update={update} onPublished={publishStory} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
+  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => { void api.saveResonance(state.resonance).then(() => go("recommendations")); }} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
   else if (state.screen === "recommendations") content = <Recommendations state={state} update={update} onEnterAtlas={() => go("atlas")} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
   else content = <StoryGalaxy
     language={state.language}
@@ -1313,7 +1610,49 @@ export default function App() {
       update(previous => ({ reactions:{...previous.reactions,[storyId]:reaction} }));
       void (reaction ? api.react(storyId,reaction) : api.removeReaction(storyId));
     }}
-    onReport={(storyId,reason,note) => api.report(storyId,reason,note).then(() => undefined)}
+    /*
+     * 举报同时做两件事：
+     *   1) 上游接口 POST /stories/:id/reports —— 真正写进后端 reports 表
+     *   2) 本地审核队列 —— 后端目前只有「创建举报」，还没有给审核台用的
+     *      列表 / 认领 / 处理接口，所以审核台的数据先留在前端。
+     *      等后端补上这些接口，第 2 段整段删掉即可。
+     */
+    onReport={(storyId, reason, note) => {
+      const sent = api.report(storyId, reason, note).then(() => undefined);
+      update(previous => {
+        const existing = previous.reviewQueue.find(item => item.nodeId === storyId && item.status === "pending");
+        if (existing) {
+          return { reviewQueue: previous.reviewQueue.map(item => item === existing
+            ? { ...item, bucket: "reported" as const, reportCount: (item.reportCount ?? 0) + 1, reportReasons: [...(item.reportReasons ?? []), reason] }
+            : item) };
+        }
+        const story = cloudStories.find(entry => entry.id === storyId);
+        const item: ReviewItem = {
+          id: `rv-${crypto.randomUUID()}`,
+          nodeId: storyId,
+          title: story?.title ?? storyId,
+          body: note.trim() ? `${story?.excerpt ?? ""}
+
+（举报补充说明：${note.trim()}）` : (story?.excerpt ?? ""),
+          tags: story?.theme ? [story.theme] : [],
+          author: story?.author ?? (state.language === "zh" ? "匿名用户" : "Anonymous"),
+          city: story?.city ?? "",
+          createdAt: Date.now(),
+          bucket: "reported",
+          status: "pending",
+          reportCount: 1,
+          reportReasons: [reason],
+        };
+        return { reviewQueue: [item, ...previous.reviewQueue] };
+      });
+      return sent;
+    }}
+    showTour={tourActive("lobby")}
+    onTourFinish={() => finishTour("lobby")}
+    onTourSkip={() => skipTour("lobby")}
+    removedNodeIds={state.reviewQueue.filter(item => item.status === "removed" && item.nodeId).map(item => item.nodeId!)}
+    inbox={state.inbox}
+    onReadInbox={() => update(previous => ({ inbox: previous.inbox.map(m => ({ ...m, read: true })) }))}
   />;
 
   return <>{content}</>;
