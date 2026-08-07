@@ -5,13 +5,15 @@ import {
   Orbit, RefreshCw, Search, SlidersHorizontal, Sparkles, ThumbsDown, X,
 } from "lucide-react";
 import { extractHints } from "./ai";
+import { api, type RecommendationItem, type User } from "./api";
 import crayonStylePreview from "./assets/image-styles/crayon.jpg";
 import minimalRealisticStylePreview from "./assets/image-styles/minimal-realistic.jpg";
 import retroCollageStylePreview from "./assets/image-styles/retro-collage.jpg";
-import { guides, icebreakers, mockAnalysis, stories } from "./data";
+import { guides, icebreakers, stories } from "./data";
 import { downloadStoryImage, generateStoryImage, type ImageStyle, type StoryHighlight } from "./image";
 import { formatCoords, geocodePlace, searchPlaces } from "./places";
 import { initialState, loadState, saveState } from "./storage";
+import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from "./offline-drafts";
 import { Auragate as PrototypeGateway } from "./PrototypeGateway";
 import { StoryGalaxy } from "./StoryGalaxy";
 import { Tour } from "./Tour";
@@ -728,7 +730,7 @@ function AdminGate({ language, themeMode, onBack, onSignedIn, onThemeModeChange 
 }
 
 function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChange, tourActive, onTourFinish, onTourSkip }: {
-  state: AppState; update: AppUpdate; onPublished: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void;
+  state: AppState; update: AppUpdate; onPublished: (draft: Draft, analysis: NonNullable<AppState["analysis"]>) => Promise<void>; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void;
 } & TourProps) {
   const step = state.wizardStep;
   const draft = state.draft;
@@ -759,6 +761,10 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageStatus, setImageStatus] = useState<"idle" | "generating" | "ready" | "failed">("idle");
   const [imageError, setImageError] = useState("");
+  const [publishError, setPublishError] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
+  const [analysisAttempt, setAnalysisAttempt] = useState(0);
   const hints = useMemo(() => extractHints(draft.body), [draft.body]);
   const mounted = useRef(false);
 
@@ -840,10 +846,14 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   useEffect(() => {
     if (step !== 2) return;
     setAnalysisStage(0);
+    setAnalysisError("");
     const timers = [650, 1400, 2200].map((time, i) => window.setTimeout(() => setAnalysisStage(i + 1), time));
-    const done = window.setTimeout(() => update({ analysis: mockAnalysis }), 2500);
-    return () => { timers.forEach(clearTimeout); clearTimeout(done); };
-  }, [step]);
+    let cancelled = false;
+    api.analyze(draft).then(analysis => { if (!cancelled) update({ analysis }); }).catch(error => {
+      if (!cancelled) setAnalysisError(error instanceof Error ? error.message : "智能分析暂时失败，请重新尝试。");
+    });
+    return () => { cancelled = true; timers.forEach(clearTimeout); };
+  }, [step, analysisAttempt]);
   useEffect(() => {
     if (!state.analysis) return;
     setTagDrafts(Object.fromEntries(Object.entries(state.analysis.tags).map(([layer, tags]) => [layer, tags.slice(0, 3)])));
@@ -889,9 +899,17 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
    * 发布前的安全检查。命中就弹柔和提示，不直接说「违规」，并且永远留一条
    * 「仍然提交」的路 —— 提交后进人工审核区，由管理员决定。没命中就直接发布。
    */
+  /** 真正调用上游的发布接口（POST /stories/publish），带上标签与错误处理 */
+  const runPublish = () => {
+    setPublishing(true); setPublishError("");
+    return onPublished(draft, { ...state.analysis!, tags: { ...state.analysis!.tags, ...tagDrafts } })
+      .catch(error => { setPublishError(error instanceof Error ? error.message : "发布失败，请稍后重试。"); })
+      .finally(() => setPublishing(false));
+  };
+
   const attemptPublish = () => {
     const result = moderateStory(draft.body);
-    if (result.flags.length === 0) { onPublished(); return; }
+    if (result.flags.length === 0) { void runPublish(); return; }
     setModeration(result);
   };
 
@@ -928,7 +946,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
     }));
     setModeration(null);
     setAppealNote("");
-    onPublished();
+    void runPublish();
   };
   const showCityHint = !!hints.city && hints.city.name !== draft.city;
   const showAgeHint = hints.age !== null && String(hints.age) !== draft.age;
@@ -1067,6 +1085,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
             {draft.cityLat !== null && <b>{formatCoords(draft.cityLat, draft.cityLon)}</b>}
           </div>
           <p className="analysis-quote">{language === "zh" ? "“每段故事，都值得被认真倾听。”" : "“Every story deserves to be heard with care.”"}</p>
+          {analysisError && <div className="api-error" role="alert"><p>{analysisError}</p><button className="button button-ghost" onClick={() => setAnalysisAttempt(value => value + 1)}>重新分析</button></div>}
           {state.analysis && <PrimaryButton onClick={() => update({ wizardStep: 3 })}>{language === "zh" ? "查收你的故事页面" : "Open your story page"}</PrimaryButton>}
         </section>
       )}
@@ -1126,7 +1145,8 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
               <p className="comic-privacy">生成时会将故事正文发送给阿里云百炼；每次只生成一张图片并按一张计费。图片只保留在当前页面，刷新后消失。</p>
             </div>
             <div className="publish-note"><Check size={17} />确认后将进入模拟安全检查，并匿名加入故事池。</div>
-            <PrimaryButton onClick={attemptPublish}>{t.publish}</PrimaryButton>
+            {publishError && <p className="api-error" role="alert">{publishError}</p>}
+            <PrimaryButton disabled={publishing} onClick={attemptPublish}>{publishing ? "正在发布…" : t.publish}</PrimaryButton>
           </div>
         </section>
       )}
@@ -1232,7 +1252,7 @@ function StoryDetail({ story, reaction, onReact, onClose, onReport }: {
   </div>;
 }
 
-function ReportDialog({ story, onClose }: { story: Story; onClose: () => void }) {
+function ReportDialog({ story, onClose, onSubmit }: { story: Story; onClose: () => void; onSubmit?: (reason: string, note: string) => Promise<void> }) {
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -1244,36 +1264,35 @@ function ReportDialog({ story, onClose }: { story: Story; onClose: () => void })
       <div className="report-reasons">{["隐私泄露", "仇恨或骚扰", "危险内容", "垃圾内容", "其他"].map(x => <button className={reason === x ? "selected" : ""} onClick={() => setReason(x)} key={x}>{reason === x && <Check size={15} />}{x}</button>)}</div>
       <label>补充说明 <small>选填</small><textarea value={note} onChange={e => setNote(e.target.value)} placeholder="请提供有助于审核的上下文…" /></label>
       <PrimaryButton disabled={!reason} onClick={() => setConfirm(true)}>检查并继续</PrimaryButton>
-    </> : <><Pill tone="orange">二次确认</Pill><h2>确认提交这次举报？</h2><div className="confirm-report"><span>举报原因</span><b>{reason}</b>{note && <p>{note}</p>}</div><p>提交后会进入人工审核队列。请确认信息准确。</p><div className="dialog-actions"><button className="button button-ghost" onClick={() => setConfirm(false)}>返回修改</button><button className="button button-danger" onClick={() => setDone(true)}>确认提交举报</button></div></>}
+    </> : <><Pill tone="orange">二次确认</Pill><h2>确认提交这次举报？</h2><div className="confirm-report"><span>举报原因</span><b>{reason}</b>{note && <p>{note}</p>}</div><p>提交后会进入人工审核队列。请确认信息准确。</p><div className="dialog-actions"><button className="button button-ghost" onClick={() => setConfirm(false)}>返回修改</button><button className="button button-danger" onClick={() => { void (onSubmit ? onSubmit(reason,note) : Promise.resolve()).then(() => setDone(true)); }}>确认提交举报</button></div></>}
   </div></div>;
 }
 
 function Recommendations({ state, update, onEnterAtlas, onHome, themeMode, onThemeModeChange }: { state: AppState; update: (patch: Partial<AppState>) => void; onEnterAtlas: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void }) {
   const [detail, setDetail] = useState<Story | null>(null);
   const [report, setReport] = useState<Story | null>(null);
-  const recommended = stories.slice(0, 5).map((s, i) => ({
-    ...s,
-    reason: [
-      "与你同样关注“归属”，但来自不同城市。",
-      "处于相近的人生阶段，也在重新理解家人的沉默。",
-      "来自不同城市，并用更轻盈的方式回应成长焦虑。",
-      "与你的主题不同，却同样面对一次重要选择。",
-      "城市和阶段都不同，但都在重新看见亲密关系。",
-    ][i],
-  }));
+  const [items, setItems] = useState<RecommendationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { api.recommendations().then(batch => setItems(batch.items)).finally(() => setLoading(false)); }, []);
+  const recommended = items.map(item => ({ ...item.story, reason: item.reason, recommendationItemId: item.id }));
   const open = (story: Story) => {
     if (!state.openedRecommendations.includes(story.id)) update({ openedRecommendations: [...state.openedRecommendations, story.id] });
+    const item = items.find(candidate => candidate.story.id === story.id);
+    if (item) void api.openRecommendation(item.id);
     setDetail(story);
   };
   const react = (id: string, reaction: Reaction) => {
     const likedAt = { ...state.likedAt };
     if (reaction === "like") likedAt[id] = Date.now(); else delete likedAt[id];
     update({ reactions: { ...state.reactions, [id]: reaction }, likedAt });
+    void (reaction ? api.react(id,reaction) : api.removeReaction(id));
   };
   return <main className={`recommend-page ${themeMode === "night" ? "theme-night" : ""}`}>
     <header className="topbar app-shell-header"><Logo onClick={onHome} /><div className="topbar-actions"><ThemeToggle language={state.language} themeMode={themeMode} onChange={onThemeModeChange} /><LanguageSelect language={state.language} onChange={language => update({ language })} /></div></header>
     <section className="recommend-heading"><div><p className="eyebrow">FIRST CONSTELLATION</p><h1>为你找到的<span className="serif">五则故事。</span></h1><p>至少打开一则，就可以进入完整轻量星图。你不需要读完固定数量。</p></div><PrimaryButton disabled={state.openedRecommendations.length < 1} onClick={onEnterAtlas}>进入故事星图</PrimaryButton></section>
     <section className="recommend-grid">
+      {loading && <p>正在为你寻找故事…</p>}
+      {!loading && recommended.length === 0 && <p>故事池还没有足够的公开故事，稍后再来看看。</p>}
       {recommended.map((story, i) => <button className={`recommend-card card-${i}`} onClick={() => open(story)} key={story.id}>
         <div className="rec-orbit"><span style={{ background: themeColors[story.theme] }} /><i /></div>
         <div className="rec-index">0{i + 1}</div>
@@ -1284,7 +1303,7 @@ function Recommendations({ state, update, onEnterAtlas, onHome, themeMode, onThe
       </button>)}
     </section>
     {detail && <StoryDetail story={detail} reaction={state.reactions[detail.id] ?? null} onReact={r => react(detail.id, r)} onClose={() => setDetail(null)} onReport={() => setReport(detail)} />}
-    {report && <ReportDialog story={report} onClose={() => setReport(null)} />}
+    {report && <ReportDialog story={report} onClose={() => setReport(null)} onSubmit={(reason,note) => api.report(report.id,reason,note).then(() => undefined)} />}
   </main>;
 }
 
@@ -1372,10 +1391,44 @@ export default function App() {
   const [gatewaySection, setGatewaySection] = useState<"intro" | "preview" | "auth">(() => initialRoute.gatewaySection ?? "intro");
   const [authMode, setAuthMode] = useState<"signup" | "login">(() => initialRoute.authMode ?? "signup");
   const [themeMode, setThemeMode] = useState<ThemeMode>("day");
+  const [user, setUser] = useState<User | null>(null);
+  const [cloudStories, setCloudStories] = useState<Story[]>([]);
+  const [mineIds, setMineIds] = useState<string[]>([]);
   const lastPathRef = useRef<string>(typeof window !== "undefined" ? normalizedPath() : "/");
   const poppingRef = useRef(false);
   const update: AppUpdate = (patch) => setState(previous => ({ ...previous, ...(typeof patch === "function" ? patch(previous) : patch) }));
   useEffect(() => saveState(state), [state]);
+  useEffect(() => {
+    let active = true;
+    api.me().then(async ({ user: currentUser }) => {
+      if (!active) return;
+      setUser(currentUser);
+      const [cloudDraft, resonance, storyList, mine] = await Promise.all([api.currentDraft(), api.getResonance(), api.stories(), api.mine()]);
+      if (!active) return;
+      setCloudStories(storyList);
+      setMineIds(mine.map(story => story.id));
+      update({ onboarded: true, accountCreated: true, firstStoryComplete: !cloudDraft, ...(cloudDraft ? { draft: { ...initialState.draft, ...cloudDraft } } : {}), resonance });
+    }).catch(async () => {
+      const recovery = await loadRecoveryDraft().catch(() => undefined);
+      if (active && recovery?.body.trim()) update({ draft: { ...initialState.draft, ...recovery } });
+    });
+    return () => { active = false; };
+  }, []);
+  const draftContentKey = [state.draft.guide,state.draft.customGuide,state.draft.title,state.draft.body,state.draft.mood,state.draft.time,state.draft.stage,state.draft.age,state.draft.city,state.draft.cityLat,state.draft.cityLon,state.draft.people.join("|")].join("\u0000");
+  useEffect(() => {
+    if (!state.draft.title.trim() && !state.draft.body.trim()) return;
+    void saveRecoveryDraft(state.draft);
+    if (!user) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api.saveDraft(state.draft).then(saved => {
+        if (cancelled) return;
+        update(previous => ({ draft: { ...previous.draft, id: saved.id, version: saved.version, savedAt: saved.savedAt, saves: saved.saves } }));
+        void clearRecoveryDraft();
+      }).catch(() => undefined);
+    }, 2000);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [draftContentKey, user?.id]);
   useEffect(() => {
     const onPop = () => {
       const route = routePatchFromPath();
@@ -1447,7 +1500,37 @@ export default function App() {
         : previous.draftBox,
     };
   });
-  const publishStory = () => update({ firstStoryComplete: true, screen: "resonance" });
+  const publishStory = async (draft: Draft, analysis: NonNullable<AppState["analysis"]>) => {
+    const { story } = await api.publish(draft, analysis);
+    setCloudStories(previous => [story, ...previous]);
+    setMineIds(previous => [story.id, ...previous]);
+    await clearRecoveryDraft().catch(() => undefined);
+    update({ firstStoryComplete: true, screen: "resonance" });
+  };
+  const completeAuth = async (input: { mode: "signup" | "login"; displayName: string; email: string; password: string }) => {
+    const result = input.mode === "signup"
+      ? await api.register({ email: input.email, password: input.password, displayName: input.displayName })
+      : await api.login({ email: input.email, password: input.password });
+    setUser(result.user);
+    const [cloudDraft,resonance,storyList,mine] = await Promise.all([api.currentDraft(),api.getResonance(),api.stories(),api.mine()]);
+    setCloudStories(storyList);
+    setMineIds(mine.map(story => story.id));
+    /*
+     * 注册 ＝ 全新账号：重开新手引导，并强制回到第一步。
+     * 不重置的话，浏览器里残留的 tour.enabled=false / firstStoryComplete=true
+     * 会让新注册的人看不到引导、或者直接掉进星空大厅 —— 而大厅按设计是最后一站。
+     * 登录保持上游原逻辑（有云端草稿就续写）。
+     */
+    const signup = input.mode === "signup";
+    update({
+      onboarded: true,
+      accountCreated: true,
+      screen: cloudDraft ? "wizard" : signup ? "wizard" : state.firstStoryComplete ? "atlas" : "wizard",
+      ...(cloudDraft ? { draft: { ...initialState.draft, ...cloudDraft } } : {}),
+      ...(signup ? { tour: { enabled: true, seen: [] }, firstStoryComplete: false, analysis: null, wizardStep: 0 } : {}),
+      resonance,
+    });
+  };
 
   /*
    * 新手引导的调度。每个场景只在「引导还开着」且「这个场景没播过」时出现，
@@ -1497,44 +1580,7 @@ export default function App() {
       language={state.language}
       onLanguageChange={language => update({ language })}
       onHome={goHome}
-      /*
-       * 「注册」本身就是「第一次来」的信号，所以注册成功时把引导重新武装一次。
-       * 不这么做的话，浏览器里残留的 tour.enabled=false（上一次看完或跳过留下的）
-       * 会让新注册的人完全看不到引导 —— 这是实际踩到过的坑。登录不重置。
-       *
-       * 注册完直接进写故事流程（先写故事，星空大厅放在最后），所以这里不再拐去 atlas。
-       */
-      onComplete={() => update(previous => {
-        /*
-         * 「注册」＝ 全新账号：既要重开引导，也要把「已经写过故事」清掉。
-         * 否则浏览器里残留的 firstStoryComplete=true 会让新注册的人直接掉进
-         * 星空大厅 —— 而大厅按设计是整条流程的最后一站。登录则完全保留原状态。
-         */
-        if (authMode === "signup") {
-          return {
-            onboarded: true,
-            accountCreated: true,
-            tour: { enabled: true, seen: [] },
-            firstStoryComplete: false,
-            analysis: null,
-            draft: { ...initialState.draft, startedAt: Date.now() },
-            screen: "wizard",
-            wizardStep: 0,
-          };
-        }
-        /*
-         * 登录：没有后端，所以不校验任何东西，直接载入演示账号「林小满」——
-         * 她已经写过故事、收件箱里有三种状态的通知，正好用来看用户端的接收效果。
-         * 提 PR 时连同 admin-mock.ts 一起删掉这一段。
-         */
-        return {
-          onboarded: true,
-          accountCreated: true,
-          firstStoryComplete: true,
-          inbox: previous.inbox.length ? previous.inbox : initialState.inbox,
-          screen: "atlas",
-        };
-      })}
+      onComplete={completeAuth}
       onAdmin={() => update({ screen: "admin" })}
       section={gatewaySection}
       authMode={authMode}
@@ -1545,7 +1591,7 @@ export default function App() {
     />;
   }
   else if (state.screen === "wizard") content = <Wizard state={state} update={update} onPublished={publishStory} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
-  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => go("atlas")} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
+  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => { void api.saveResonance(state.resonance).then(() => go("recommendations")); }} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
   else if (state.screen === "recommendations") content = <Recommendations state={state} update={update} onEnterAtlas={() => go("atlas")} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
   else content = <StoryGalaxy
     language={state.language}
@@ -1554,40 +1600,59 @@ export default function App() {
     onThemeModeChange={setThemeMode}
     onWrite={startNewStory}
     onHome={goHome}
-    onLogout={goHome}
+    onLogout={() => { void api.logout().finally(() => { setUser(null); setCloudStories([]); setMineIds([]); goHome(); }); }}
     resonance={state.resonance}
-    onResonanceChange={resonance => update({ resonance })}
+    onResonanceChange={resonance => { update({ resonance }); void api.saveResonance(resonance); }}
+    stories={cloudStories}
+    mineIds={mineIds}
+    reactions={state.reactions}
+    onReact={(storyId,reaction) => {
+      update(previous => ({ reactions:{...previous.reactions,[storyId]:reaction} }));
+      void (reaction ? api.react(storyId,reaction) : api.removeReaction(storyId));
+    }}
+    /*
+     * 举报同时做两件事：
+     *   1) 上游接口 POST /stories/:id/reports —— 真正写进后端 reports 表
+     *   2) 本地审核队列 —— 后端目前只有「创建举报」，还没有给审核台用的
+     *      列表 / 认领 / 处理接口，所以审核台的数据先留在前端。
+     *      等后端补上这些接口，第 2 段整段删掉即可。
+     */
+    onReport={(storyId, reason, note) => {
+      const sent = api.report(storyId, reason, note).then(() => undefined);
+      update(previous => {
+        const existing = previous.reviewQueue.find(item => item.nodeId === storyId && item.status === "pending");
+        if (existing) {
+          return { reviewQueue: previous.reviewQueue.map(item => item === existing
+            ? { ...item, bucket: "reported" as const, reportCount: (item.reportCount ?? 0) + 1, reportReasons: [...(item.reportReasons ?? []), reason] }
+            : item) };
+        }
+        const story = cloudStories.find(entry => entry.id === storyId);
+        const item: ReviewItem = {
+          id: `rv-${crypto.randomUUID()}`,
+          nodeId: storyId,
+          title: story?.title ?? storyId,
+          body: note.trim() ? `${story?.excerpt ?? ""}
+
+（举报补充说明：${note.trim()}）` : (story?.excerpt ?? ""),
+          tags: story?.theme ? [story.theme] : [],
+          author: story?.author ?? (state.language === "zh" ? "匿名用户" : "Anonymous"),
+          city: story?.city ?? "",
+          createdAt: Date.now(),
+          bucket: "reported",
+          status: "pending",
+          reportCount: 1,
+          reportReasons: [reason],
+        };
+        return { reviewQueue: [item, ...previous.reviewQueue] };
+      });
+      return sent;
+    }}
     showTour={tourActive("lobby")}
     onTourFinish={() => finishTour("lobby")}
     onTourSkip={() => skipTour("lobby")}
     removedNodeIds={state.reviewQueue.filter(item => item.status === "removed" && item.nodeId).map(item => item.nodeId!)}
     inbox={state.inbox}
     onReadInbox={() => update(previous => ({ inbox: previous.inbox.map(m => ({ ...m, read: true })) }))}
-    onReport={(node, reason, note) => update(previous => {
-      // 同一颗星被多次举报就累加计数，不重复插条目
-      const existing = previous.reviewQueue.find(item => item.nodeId === node.id && item.status === "pending");
-      if (existing) {
-        return { reviewQueue: previous.reviewQueue.map(item => item === existing
-          ? { ...item, bucket: "reported" as const, reportCount: (item.reportCount ?? 0) + 1, reportReasons: [...(item.reportReasons ?? []), reason] }
-          : item) };
-      }
-      const item: ReviewItem = {
-        // 用时间戳当 id：同一毫秒内的两次举报会撞，改成 UUID
-        id: `rv-${crypto.randomUUID()}`,
-        nodeId: node.id,
-        title: node.label,
-        body: note.trim() ? `${node.desc}\n\n（举报补充说明：${note.trim()}）` : node.desc,
-        tags: [node.theme],
-        author: state.language === "zh" ? "匿名用户" : "Anonymous",
-        city: "",
-        createdAt: Date.now(),
-        bucket: "reported",
-        status: "pending",
-        reportCount: 1,
-        reportReasons: [reason],
-      };
-      return { reviewQueue: [item, ...previous.reviewQueue] };
-    })}
   />;
 
   return <>{content}</>;

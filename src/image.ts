@@ -30,6 +30,7 @@ export async function generateStoryImage(
   const tags = editedTags?.length ? editedTags : Object.values(analysis.tags).flat();
   const response = await fetch(endpoint, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       mode: "single-highlight-v1",
@@ -45,9 +46,11 @@ export async function generateStoryImage(
       tags,
     }),
   });
-  const result = await response.json().catch(() => ({})) as StoryImageResponse;
+  const payload = await response.json().catch(() => ({})) as { data?: StoryImageResponse; error?: string | { message?: string }; imageUrl?: string; imageStyle?: ImageStyle; highlight?: StoryHighlight; imagePrompt?: string };
+  const result = payload.data ?? payload;
   if (!response.ok || !result.imageUrl || !result.highlight || !result.imagePrompt || result.imageStyle !== imageStyle) {
-    throw new Error(result.error || "故事图片生成失败，请稍后重试。");
+    const error = typeof payload.error === "string" ? payload.error : payload.error?.message;
+    throw new Error(error || "故事图片生成失败，请稍后重试。");
   }
   return {
     imageUrl: result.imageUrl,

@@ -820,6 +820,17 @@ input::placeholder,textarea::placeholder { color: #aaa69e; }.auth-form input { h
   box-shadow: 0 0 24px rgba(149,233,255,.22);
 }
 
+.api-error {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(190, 56, 42, .28);
+  border-radius: 14px;
+  background: rgba(255, 241, 238, .92);
+  color: #9f2f24;
+  font-size: 13px;
+}
+.api-error p { margin: 0 0 10px; }
+
 @media(max-width:1000px){
   .gateway-auth-card{grid-template-columns:1fr}.gateway-auth-visual{min-height:360px}.gateway-story-rail{width:190vw;margin-left:-45vw}.porthole{width:min(760px,88vw)}.intro-terminal{padding:34px 28px;min-height:380px}.preview-hero{margin-top:56px}.preview-gallery{width:170vw;margin-left:-35vw}.auth-shell-minimal{grid-template-columns:1fr}.auth-shell-minimal .auth-brand{min-height:420px}.ice-hero{grid-template-columns:1fr;padding-top:60px}.hero-copy{max-width:680px}.ice-orbit{height:600px}.auth-shell{grid-template-columns:1fr}.auth-brand{min-height:430px}.auth-form{padding:55px}.guide-grid{grid-template-columns:1fr 1fr}.collection-layout{grid-template-columns:1fr}.prompt-panel{position:relative;top:0}.confirm-layout{grid-template-columns:1fr}.dimension-grid{grid-template-columns:1fr}.dimension-card{display:grid;grid-template-columns:220px 1fr;align-items:center}.recommend-card.card-0,.recommend-card.card-1,.recommend-card.card-2,.recommend-card.card-3,.recommend-card.card-4{grid-column:span 6}.atlas-page{grid-template-columns:1fr}.sidebar{position:fixed;z-index:20;left:0;top:0;bottom:0;width:250px;transform:translateX(-100%);transition:.25s;box-shadow:20px 0 50px rgba(0,0,0,.12)}.sidebar.open{transform:none}.mobile-menu{display:grid;place-items:center}.atlas-cards{grid-template-columns:1fr 1fr}.story-modal{grid-template-columns:1fr;height:92vh;overflow:auto}.visual{grid-row:auto;min-height:260px}.story-content{overflow:visible}.story-actions{grid-column:1}.inline-resonance{grid-template-columns:1fr}
   .guide-sticky{position:static;height:auto;margin-bottom:14px}.guide-stack .guide-card{grid-template-columns:1fr;gap:20px;padding:26px}.guide-side{padding:18px 0 0;border-left:0;border-top:1px solid var(--line)}.guide-stack .guide-card.selected .guide-side{border-color:#3a3a3a}.collection-layout.focus-mode .prompt-panel{position:sticky;top:10px}.field-grid{grid-template-columns:1fr 1fr}

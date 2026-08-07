@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { Tour } from "./Tour";
 import type { InboxMessage } from "./types";
 import "./story-galaxy.css";
+import type { Reaction, Story } from "./types";
 
 type IconName = "compass" | "book" | "tune" | "heart" | "thumbsDown" | "flag" | "plus" | "search" | "x" | "user" | "logout" | "sun" | "moon" | "bell";
 type ViewMode = "explore" | "mine" | "resonance" | "liked" | "write";
@@ -390,17 +391,17 @@ function AnimationTimeline({ galaxyRef, disabled }: { galaxyRef: MutableRefObjec
   return null;
 }
 
-function GalaxyScene({ activeView, selected, onSelect, zoom, themeMode, resonance, removedIds }: { activeView: ViewMode; selected: StoryNodeData | null; onSelect: (node: StoryNodeData | null) => void; zoom: number; themeMode: ThemeMode; resonance: ResonanceSelection; removedIds: string[] }) {
+function GalaxyScene({ activeView, selected, onSelect, zoom, themeMode, resonance, nodes, removedIds }: { activeView: ViewMode; selected: StoryNodeData | null; onSelect: (node: StoryNodeData | null) => void; zoom: number; themeMode: ThemeMode; resonance: ResonanceSelection; nodes: StoryNodeData[]; removedIds: string[] }) {
   const galaxyRef = useRef<THREE.Group | null>(null);
   const controlsRef = useRef<any>(null);
   const visibleNodes = useMemo(() => {
     // 被管理员下架的故事，那颗星直接从星图上消失
-    const live = storyNodes.filter((node) => !removedIds.includes(node.id));
+    const live = nodes.filter((node) => !removedIds.includes(node.id));
     const resonantNodes = live.map((node) => applyResonanceToNode(node, resonance));
     if (activeView === "mine") return resonantNodes.filter((node) => node.mine);
     if (activeView === "liked") return resonantNodes.filter((node) => node.liked);
     return resonantNodes;
-  }, [activeView, resonance, removedIds]);
+  }, [activeView, resonance, nodes, removedIds]);
 
   return (
     <Canvas camera={{ position: [0, 0.62, 10.25], fov: 53 }} dpr={[1, 1.6]} gl={{ antialias: true, alpha: false }}>
@@ -431,7 +432,7 @@ function GalaxyScene({ activeView, selected, onSelect, zoom, themeMode, resonanc
 
 type GalaxyReaction = "like" | "dislike" | null;
 
-function StoryPanel({ node, language, onClose, onReported }: { node: StoryNodeData; language: "zh" | "en"; onClose: () => void; onReported: (node: StoryNodeData, reason: string, note: string) => void }) {
+function StoryPanel({ node, language, onClose, onReact, onReport }: { node: StoryNodeData; language: "zh" | "en"; onClose: () => void; onReact?: (storyId: string, reaction: GalaxyReaction) => void; onReport?: (storyId: string, reason: string, note: string) => Promise<void> }) {
   const t = galaxyCopy[language];
   const [reaction, setReaction] = useState<GalaxyReaction>(null);
   const [reportOpen, setReportOpen] = useState(false);
@@ -485,10 +486,10 @@ function StoryPanel({ node, language, onClose, onReported }: { node: StoryNodeDa
           {["异乡", "选择", "记忆", "城市", "共鸣"].map((tag) => <span key={tag}>{tag}</span>)}
         </div>
         <div className="story-panel-actions">
-          <button className={reaction === "like" ? "is-active like" : ""} onClick={() => setReaction(reaction === "like" ? null : "like")}>
+          <button className={reaction === "like" ? "is-active like" : ""} onClick={() => { const next=reaction === "like" ? null : "like"; setReaction(next); onReact?.(node.id,next); }}>
             <Icon name="heart" size={16} />{t.like}
           </button>
-          <button className={reaction === "dislike" ? "is-active dislike" : ""} onClick={() => setReaction(reaction === "dislike" ? null : "dislike")}>
+          <button className={reaction === "dislike" ? "is-active dislike" : ""} onClick={() => { const next=reaction === "dislike" ? null : "dislike"; setReaction(next); onReact?.(node.id,next); }}>
             <Icon name="thumbsDown" size={16} />{t.dislike}
           </button>
           <button onClick={() => setReportOpen(true)}>
@@ -496,7 +497,7 @@ function StoryPanel({ node, language, onClose, onReported }: { node: StoryNodeDa
           </button>
         </div>
       </aside>
-      {reportOpen && <GalaxyReportDialog language={language} node={node} onClose={() => setReportOpen(false)} onReported={onReported} />}
+      {reportOpen && <GalaxyReportDialog language={language} node={node} onClose={() => setReportOpen(false)} onSubmit={onReport} />}
     </>
   );
 }
@@ -651,7 +652,7 @@ function AccountDialog({ language, onClose }: { language: "zh" | "en"; onClose: 
   );
 }
 
-function GalaxyReportDialog({ language, node, onClose, onReported }: { language: "zh" | "en"; node: StoryNodeData; onClose: () => void; onReported: (node: StoryNodeData, reason: string, note: string) => void }) {
+function GalaxyReportDialog({ language, node, onClose, onSubmit }: { language: "zh" | "en"; node: StoryNodeData; onClose: () => void; onSubmit?: (storyId: string, reason: string, note: string) => Promise<void> }) {
   const t = galaxyCopy[language];
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
@@ -690,8 +691,8 @@ function GalaxyReportDialog({ language, node, onClose, onReported }: { language:
             <div className="galaxy-confirm-card"><span>{node.label}</span><b>{reason}</b>{note && <p>{note}</p>}</div>
             <div className="galaxy-dialog-actions">
               <button onClick={() => setConfirm(false)}>{t.reportBack}</button>
-              {/* 举报提交后进人工审核区，成为管理端「被其它用户举报」那一类 */}
-              <button className="danger" onClick={() => { onReported(node, reason, note); setDone(true); }}>{t.reportSubmit}</button>
+              {/* 上游的 onSubmit 会 POST /stories/:id/reports；本地审核台的队列在 App 里同步追加 */}
+              <button className="danger" onClick={() => { void (onSubmit?.(node.id,reason,note) ?? Promise.resolve()).then(() => setDone(true)); }}>{t.reportSubmit}</button>
             </div>
           </>
         )}
@@ -710,11 +711,15 @@ export function StoryGalaxy({
   onLogout,
   resonance = defaultResonance,
   onResonanceChange,
+  stories = [],
+  mineIds = [],
+  reactions = {},
+  onReact,
+  onReport,
   showTour = false,
   onTourFinish,
   onTourSkip,
   removedNodeIds = [],
-  onReport,
   inbox = [],
   onReadInbox,
 }: {
@@ -727,12 +732,16 @@ export function StoryGalaxy({
   onLogout?: () => void;
   resonance?: ResonanceSelection;
   onResonanceChange?: (resonance: ResonanceSelection) => void;
+  stories?: Story[];
+  mineIds?: string[];
+  reactions?: Record<string, Reaction>;
+  onReact?: (storyId: string, reaction: Reaction) => void;
+  onReport?: (storyId: string, reason: string, note: string) => Promise<void>;
   showTour?: boolean;
   onTourFinish?: () => void;
   onTourSkip?: () => void;
   /** 被管理员下架的星点 id，星图上直接不画 */
   removedNodeIds?: string[];
-  onReport?: (node: StoryNodeData, reason: string, note: string) => void;
   inbox?: InboxMessage[];
   onReadInbox?: () => void;
 }) {
@@ -742,6 +751,22 @@ export function StoryGalaxy({
   const [confirmedResonance, setConfirmedResonance] = useState<ResonanceSelection>(resonance);
   const [draftResonance, setDraftResonance] = useState<ResonanceSelection>(resonance);
   const t = galaxyCopy[language];
+  const nodes = useMemo<StoryNodeData[]>(() => {
+    if (!stories.length) return storyNodes;
+    const themeMap: Record<string, StoryTheme> = { 迁移:"city", 城市:"city", 家庭:"family", 关系:"family", 工作:"choice", 身份:"choice", 成长:"future" };
+    return stories.map((story,index) => ({
+      id: story.id,
+      words: story.body.length,
+      theme: themeMap[story.theme] || "memory",
+      similarity: Math.max(0.28,0.92-index*0.055),
+      label: story.title,
+      desc: story.body,
+      mine: mineIds.includes(story.id),
+      liked: reactions[story.id] === "like",
+      angle: (index / Math.max(stories.length,1)) * Math.PI * 2,
+      lift: ((index % 5)-2)*0.16,
+    }));
+  },[stories,mineIds,reactions]);
 
   useEffect(() => {
     setConfirmedResonance(resonance);
@@ -771,7 +796,7 @@ export function StoryGalaxy({
 
   return (
     <main className="storyverse-root" data-theme={themeMode} onWheel={handleWheel}>
-      <GalaxyScene activeView={activeView} selected={selected} onSelect={setSelected} zoom={zoom} themeMode={themeMode} resonance={confirmedResonance} removedIds={removedNodeIds} />
+      <GalaxyScene activeView={activeView} selected={selected} onSelect={setSelected} zoom={zoom} themeMode={themeMode} resonance={confirmedResonance} nodes={nodes} removedIds={removedNodeIds} />
       <div className="meteor meteor-one" />
       <div className="meteor meteor-two" />
       <div className="meteor meteor-three" />
@@ -790,7 +815,7 @@ export function StoryGalaxy({
         </div>
       </header>
       <p className="bottom-legend">{t.legend}</p>
-      {selected && <StoryPanel node={selected} language={language} onClose={() => setSelected(null)} onReported={onReport ?? (() => {})} />}
+      {selected && <StoryPanel node={selected} language={language} onClose={() => setSelected(null)} onReact={onReact} onReport={onReport} />}
       {activeView === "resonance" && <ResonanceBar language={language} value={draftResonance} onChange={setDraftResonance} onConfirm={confirmResonance} />}
       <AccountDock language={language} onLogout={onLogout ?? onHome} inbox={inbox} onReadInbox={() => onReadInbox?.()} />
       <FloatingMenu activeView={activeView} language={language} onChange={handleViewChange} />

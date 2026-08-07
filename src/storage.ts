@@ -3,7 +3,7 @@ import { emptyDraft } from "./data";
 import { demoInbox, demoReviewQueue } from "./admin-mock";
 import type { AppState } from "./types";
 
-const KEY = "storyverse.local.v3";
+const KEY = "storyverse.preferences.v1";
 
 export const initialState: AppState = {
   language: "zh",
@@ -30,11 +30,17 @@ export function loadState(): AppState {
   try {
     const raw = localStorage.getItem(KEY);
     const parsed = raw ? JSON.parse(raw) : null;
+    /*
+     * 上游已经把草稿 / 故事 / 共鸣偏好挪到后端，本地只留 language。
+     * 这里额外保留的四项都是「后端还没有对应接口」的东西：
+     *   tour        —— 引导进度，理想上应该按用户存在服务端
+     *   reviewQueue —— 人工审核队列，后端已有 reports 表但没有审核接口
+     *   inbox       —— 审核结果通知，后端还没有 notifications 表
+     *   isAdmin     —— 纯前端演示开关，真实角色校验必须走服务端
+     * 接口就绪后这四项都应该删掉，改为服务端状态。
+     */
     return parsed ? {
       ...initialState,
-      ...parsed,
-      draft: { ...emptyDraft, ...parsed.draft },
-      draftBox: parsed.draftBox ?? [],
       language: parsed.language ?? "zh",
       tour: { ...initialState.tour, ...(parsed.tour ?? {}) },
       reviewQueue: parsed.reviewQueue ?? initialState.reviewQueue,
@@ -47,7 +53,7 @@ export function loadState(): AppState {
 }
 
 export function saveState(state: AppState) {
-  localStorage.setItem(KEY, JSON.stringify(state));
+  localStorage.setItem(KEY, JSON.stringify({ language: state.language }));
 }
 
 export function resetState() {
