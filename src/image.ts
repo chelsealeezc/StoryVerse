@@ -28,29 +28,37 @@ export async function generateStoryImage(
     ? "https://dcc1fc237cf0411084a6990a6cf00cfd-cn-hangzhou.alicloudapi.com/api/generate-image"
     : "/api/generate-image");
   const tags = editedTags?.length ? editedTags : Object.values(analysis.tags).flat();
-  const response = await fetch(endpoint, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mode: "single-highlight-v1",
-      imageStyle,
-      title: draft.title || analysis.suggestedTitle,
-      story: draft.body,
-      city: draft.city,
-      mood: draft.mood,
-      time: draft.time,
-      stage: draft.stage,
-      gender: draft.gender,
-      people: draft.people,
-      tags,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "single-highlight-v1",
+        imageStyle,
+        title: draft.title || analysis.suggestedTitle,
+        story: draft.body,
+        city: draft.city,
+        mood: draft.mood,
+        time: draft.time,
+        stage: draft.stage,
+        gender: draft.gender,
+        people: draft.people,
+        tags,
+      }),
+    });
+  } catch {
+    throw new Error("暂时无法连接生图服务。你可以重试，也可以先跳过生图继续发布故事。");
+  }
   const payload = await response.json().catch(() => ({})) as { data?: StoryImageResponse; error?: string | { message?: string }; imageUrl?: string; imageStyle?: ImageStyle; highlight?: StoryHighlight; imagePrompt?: string };
   const result = payload.data ?? payload;
   if (!response.ok || !result.imageUrl || !result.highlight || !result.imagePrompt || result.imageStyle !== imageStyle) {
     const error = typeof payload.error === "string" ? payload.error : payload.error?.message;
-    throw new Error(error || "故事图片生成失败，请稍后重试。");
+    if (response.status === 401) throw new Error("登录状态已失效，请重新登录后再生图；也可以先跳过生图继续发布故事。");
+    if (response.status === 429) throw new Error("今天的生图次数已用完。你可以先跳过生图继续发布故事。");
+    if (response.status >= 500) throw new Error(`${error || "生图服务暂时不可用。"} 你可以先跳过生图继续发布故事。`);
+    throw new Error(error || "故事图片生成失败。你可以重试，也可以先跳过生图继续发布故事。");
   }
   return {
     imageUrl: result.imageUrl,

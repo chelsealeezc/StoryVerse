@@ -78,6 +78,7 @@ const draft: Draft = {
   time: "最近一年",
   stage: "青年探索",
   age: "26",
+  gender: "其他",
   city: "杭州",
   cityEn: "Hangzhou",
   cityCountry: "中国",
@@ -132,5 +133,21 @@ describe("generateStoryImage", () => {
     expect(body.imageStyle).toBe(imageStyle);
     expect(result.imageStyle).toBe(imageStyle);
     expect(result.imageUrl).toMatch(/^data:image\/png/);
+  });
+
+  it("explains that publishing can continue when the image service is unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: { message: "生图服务暂时不可用。" } }),
+    }));
+
+    await expect(generateStoryImage(draft, analysis, "crayon")).rejects.toThrow("先跳过生图继续发布故事");
+  });
+
+  it("turns a network failure into an actionable message", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    await expect(generateStoryImage(draft, analysis, "crayon")).rejects.toThrow("暂时无法连接生图服务");
   });
 });

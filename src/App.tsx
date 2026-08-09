@@ -1135,14 +1135,14 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
                 ) : imageStatus === "generating" ? (
                   <div className="comic-state"><LoaderCircle className="comic-spinner" size={38} /><b>正在寻找故事的高光时刻…</b><small>千问会先提取最值得画下来的瞬间，万相随后生成一张 {imageStyleOptions.find(option => option.id === imageStyle)?.label} 插画</small></div>
                 ) : imageStatus === "failed" ? (
-                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>这次没有完成故事图片</b><small>{imageError}</small><button className="retry-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成图片</button></div>
+                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>这次没有完成故事图片</b><small>{imageError}</small><div className="comic-fallback-actions"><button className="retry-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成图片</button><button className="skip-comic" disabled={publishing} onClick={attemptPublish}>{publishing ? "正在发布…" : "跳过图片，继续发布"}</button></div></div>
                 ) : (
                   <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>把故事高光变成一张插画</b><small>AI 会从正文中选择一个真实、可画的关键瞬间，并按你选择的风格生成</small><button className="retry-comic" onClick={() => void runImageGeneration()}>生成故事图片</button></div>
                 )}
               </div>
               {storyImage && <div className="comic-actions"><button className="download-comic" onClick={() => downloadStoryImage(storyImage, draft.title || state.analysis!.suggestedTitle, imageStyle)}><Download size={16} />下载故事图片</button><button className="regenerate-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成</button></div>}
               {storyHighlight && <details className="comic-storyboard"><summary>查看 AI 选中的高光时刻</summary><div className="highlight-detail"><b>{storyHighlight.title}</b><p>{storyHighlight.moment}</p><span>{storyHighlight.scene} · {storyHighlight.action}</span><em>{storyHighlight.emotion}</em>{imagePrompt && <details><summary>查看绘画 Prompt</summary><p>{imagePrompt}</p></details>}</div></details>}
-              <p className="comic-privacy">生成时会将故事正文发送给阿里云百炼；每次只生成一张图片并按一张计费。图片只保留在当前页面，刷新后消失。</p>
+              <p className="comic-privacy">生图是可选项，不会阻止你发布故事。生成时会将故事正文发送给阿里云百炼；每次只生成一张图片并按一张计费。图片只保留在当前页面，刷新后消失。</p>
             </div>
             <div className="publish-note"><Check size={17} />确认后将进入模拟安全检查，并匿名加入故事池。</div>
             {publishError && <p className="api-error" role="alert">{publishError}</p>}
