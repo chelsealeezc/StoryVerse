@@ -402,14 +402,6 @@ async function generateComic(storyboard: Storyboard, apiKey: string, baseUrl: st
   return urls;
 }
 
-async function downloadAsDataUrl(url: string) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error("IMAGE_DOWNLOAD");
-  const contentType = response.headers.get("content-type") || "image/png";
-  const image = Buffer.from(await response.arrayBuffer()).toString("base64");
-  return `data:${contentType};base64,${image}`;
-}
-
 export function createImageGenerationHandler({
   apiKey,
   workspaceId,
@@ -454,8 +446,10 @@ export function createImageGenerationService({
       const imageStyle = requestInput.imageStyle;
       const highlight = await createHighlight(input, imageStyle, apiKey, qwenBaseUrl, qwenModel);
       const imagePrompt = buildSingleImagePrompt(highlight, imageStyle);
-      const temporaryUrl = await generateSingleImage(imagePrompt, apiKey, wanBaseUrl, imageModel);
-      const imageUrl = await downloadAsDataUrl(temporaryUrl);
+      // DashScope already returns a short-lived signed URL. Returning it directly
+      // avoids a second server-side download and a multi-megabyte Base64 JSON
+      // response, both of which are fragile behind API Gateway.
+      const imageUrl = await generateSingleImage(imagePrompt, apiKey, wanBaseUrl, imageModel);
       return {
         imageUrl,
         imageStyle,
@@ -464,8 +458,7 @@ export function createImageGenerationService({
       };
     }
     const storyboard = await createStoryboard(input, apiKey, qwenBaseUrl, qwenModel);
-    const temporaryUrls = await generateComic(storyboard, apiKey, wanBaseUrl, imageModel);
-    return { storyboard, imageUrls: await Promise.all(temporaryUrls.map(downloadAsDataUrl)) };
+    return { storyboard, imageUrls: await generateComic(storyboard, apiKey, wanBaseUrl, imageModel) };
   };
 }
 
@@ -495,12 +488,12 @@ export function imageGenerationError(error: unknown) {
         return { status: 502, message: `万相四格生成失败：${message.slice(15, 315)}` };
       } else if (message.startsWith("IMAGE_COUNT:")) {
         return { status: 502, message: `万相本次只返回了 ${message.slice(12)} 张图片，没有形成完整四格，请重新生成。` };
-      } else if (message === "IMAGE_DOWNLOAD") {
-        return { status: 502, message: "图片已生成，但临时图片下载失败，请重新生成。" };
       } else if (message === "PAYLOAD_TOO_LARGE") {
         return { status: 413, message: "故事内容过长，无法生成图片。" };
       } else if (error instanceof Error && error.name === "TimeoutError") {
         return { status: 504, message: "故事图片生成超时，请稍后重试。" };
+      } else if (error instanceof TypeError) {
+        return { status: 502, message: "生图服务无法连接阿里云百炼上游，请检查服务端的百炼地址配置。" };
       }
       return { status: 502, message: "暂时无法生成故事图片，请稍后重试。" };
 }
