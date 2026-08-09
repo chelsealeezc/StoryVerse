@@ -3,6 +3,7 @@ import {
   IMAGE_STYLES,
   SINGLE_IMAGE_PARAMETERS,
   buildSingleImagePrompt,
+  createImageGenerationService,
   validateHighlight,
   type ImageStyle,
   type StoryHighlight,
@@ -66,6 +67,34 @@ describe("single highlight image prompts", () => {
       thinking_mode: true,
       watermark: false,
     });
+  });
+
+  it("returns the provider URL without downloading and Base64-encoding the image", async () => {
+    const providerUrl = "https://example.com/temporary-story-image.png";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: JSON.stringify(highlight) } }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ output: { choices: [{ message: { content: [{ image: providerUrl }] } }] } }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const generate = createImageGenerationService({
+      apiKey: "test-key",
+      imageBaseUrl: "https://example.com",
+      qwenBaseUrl: "https://example.com/compatible-mode/v1",
+    });
+
+    const result = await generate({
+      mode: "single-highlight-v1",
+      imageStyle: "minimal-realistic",
+      story: "这是一段长度超过三十个字的测试故事，用来验证服务端不会再次下载已经生成的临时图片，而是直接返回安全的签名地址。",
+    });
+
+    expect("imageUrl" in result && result.imageUrl).toBe(providerUrl);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -306,8 +306,17 @@ export async function buildApp(options: { pool?: pg.Pool | null } = {}): Promise
   app.post("/api/generate-image", { config:{rateLimit:{max:6,timeWindow:"1 hour"}}, preHandler: authenticated }, async (request,reply) => {
     try {
       const result=await generateImage(request.body as Parameters<typeof generateImage>[0]);
-      if ("imageUrl" in result) await pool!.query(`insert into generated_images (user_id,style,prompt,highlight,status,model,expires_at)
-        values ($1,$2,$3,$4,'ready',$5,now()+interval '24 hours')`,[userOf(request).id,result.imageStyle,result.imagePrompt,JSON.stringify(result.highlight),process.env.DASHSCOPE_IMAGE_MODEL||"wan2.7-image"]);
+      if ("imageUrl" in result) {
+        try {
+          await pool!.query(`insert into generated_images (user_id,style,prompt,highlight,status,model,expires_at)
+            values ($1,$2,$3,$4,'ready',$5,now()+interval '24 hours')`,[userOf(request).id,result.imageStyle,result.imagePrompt,JSON.stringify(result.highlight),process.env.DASHSCOPE_IMAGE_MODEL||"wan2.7-image"]);
+        } catch (error) {
+          // Metadata persistence is observability, not part of the user's paid
+          // generation result. Never discard a successfully generated image
+          // because a legacy table or grant is temporarily unavailable.
+          request.log.error({ err:error },"generated image metadata persistence failed");
+        }
+      }
       return ok(request,result);
     } catch(error) {
       const mapped=imageGenerationError(error);
