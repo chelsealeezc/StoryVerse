@@ -5,6 +5,7 @@ import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import gsap from "gsap";
 import * as THREE from "three";
 import { Tour } from "./Tour";
+import { BrandLogo } from "./BrandLogo";
 import type { InboxMessage } from "./types";
 import "./story-galaxy.css";
 import type { Reaction, Story } from "./types";
@@ -801,7 +802,9 @@ export function StoryGalaxy({
       <div className="meteor meteor-two" />
       <div className="meteor meteor-three" />
       <header className="top-overlay">
-        <button className="brand brand-button" onClick={onHome} aria-label={language === "zh" ? "回到首页" : "Back home"}><span>Story</span>Verse</button>
+        <button className="brand brand-button" onClick={onHome} aria-label={language === "zh" ? "回到首页" : "Back home"}>
+          <BrandLogo />
+        </button>
         <div className="header-actions" data-tour="top-controls">
           <button className="neon-control theme-button" aria-label={t.theme} onClick={() => onThemeModeChange(themeMode === "night" ? "day" : "night")}>
             <Icon name={themeMode === "night" ? "sun" : "moon"} size={20} />

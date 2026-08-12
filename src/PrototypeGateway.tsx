@@ -1,6 +1,7 @@
 import { CSSProperties, RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import generatedPortalBg from "./assets/auragate-portal-bg-transparent.png";
 import nightWorldBg from "./assets/storyverse-night-bg.png";
+import { BrandLogo } from "./BrandLogo";
 
 const PORTAL_BG = generatedPortalBg;
 const WORLD_BG =
@@ -38,8 +39,13 @@ const gatewayCopy = {
     previousStory: "上一张故事卡片",
     nextStory: "下一张故事卡片",
     footerHowItWorks: "它如何运作",
-    footerHowItWorksTitle: "新手引导正在准备中",
-    footerHowItWorksBody: "这里会接入一段轻量的新手引导，帮助第一次来到 StoryVerse 的用户理解如何写故事、选择共鸣方向、进入星图。",
+    footerHowItWorksTitle: "第一次来到 StoryVerse？",
+    footerHowItWorksBody: "你可以把它理解成一个从故事出发的共鸣星图：先找到一个能让你开口的入口，再写下经历，最后选择想听见相近还是不同的人生。",
+    footerHowItWorksSteps: [
+      "选择一个 Icebreaker。它不是分类考试，只是给记忆一个可以开始的地方。",
+      "顺着提示写下故事。AI 只整理标签与故事页面，不会替你改写正文。",
+      "发布后选择城市、人生阶段、主题三个方向，进入 StoryVerse 星图。",
+    ],
     footerContact: "联系",
     footerRed: "小红书",
     footerEmail: "zicuili25@stu.pku.edu.cn",
@@ -51,7 +57,7 @@ const gatewayCopy = {
     signup: "注册",
     login: "登录",
     nickname: "昵称",
-    nicknamePlaceholder: "给自己起一个在 StoryVerse 中的名字吧",
+    nicknamePlaceholder: "我们会保护您的身份隐私，取一个独属您的昵称吧",
     email: "邮箱/电话",
     emailPlaceholder: "邮箱或中国大陆手机号",
     password: "密码",
@@ -90,8 +96,13 @@ const gatewayCopy = {
     previousStory: "Previous story card",
     nextStory: "Next story card",
     footerHowItWorks: "How it works",
-    footerHowItWorksTitle: "New user guide is in progress",
-    footerHowItWorksBody: "This will open a lightweight onboarding guide explaining how to write a story, choose resonance directions, and enter the atlas.",
+    footerHowItWorksTitle: "New to StoryVerse?",
+    footerHowItWorksBody: "Think of it as a resonance atlas built from lived stories: find an opening, write what happened, then choose whether you want to hear nearby or different lives.",
+    footerHowItWorksSteps: [
+      "Pick an icebreaker. It is not a test — just a place where memory can begin.",
+      "Write your story in your own words. AI only organizes tags and the story page; it does not rewrite your voice.",
+      "After publishing, choose city, life stage, and theme directions to enter the StoryVerse atlas.",
+    ],
     footerContact: "Contact",
     footerRed: "RED",
     footerEmail: "zicuili25@stu.pku.edu.cn",
@@ -103,7 +114,7 @@ const gatewayCopy = {
     signup: "Sign up",
     login: "Log in",
     nickname: "Nickname",
-    nicknamePlaceholder: "Choose a name for yourself in StoryVerse",
+    nicknamePlaceholder: "Your identity stays private. Choose a name that belongs to you.",
     email: "Email / phone",
     emailPlaceholder: "Email or Mainland China phone number",
     password: "Password",
@@ -137,7 +148,7 @@ const termsUrl = "https://icnh1tjz358q.feishu.cn/wiki/Wb3NwnFEWig5V0kTROGcd35nnl
 
 function isValidEmailOrChinaPhone(value: string) {
   const trimmed = value.trim();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) || /^1[3-9]\d{9}$/.test(trimmed);
 }
 
 export type GatewayAuthInput = { mode: "signup" | "login"; displayName: string; email: string; password: string };
@@ -157,29 +168,7 @@ function useIsMobile() {
 }
 
 function Wordmark({ isMobile, onClick, ariaLabel = "回到 StoryVerse 首页" }: { isMobile: boolean; onClick?: () => void; ariaLabel?: string }) {
-  const content = (
-    <>
-      <span
-        style={{
-          fontFamily: '"Mr Dafoe Regular", cursive',
-          fontSize: isMobile ? 30 : 36,
-          lineHeight: 0.8,
-        }}
-      >
-        Story
-      </span>
-      <span
-        style={{
-          fontSize: isMobile ? 20 : 24,
-          fontWeight: 500,
-          letterSpacing: "-0.02em",
-          marginLeft: -2,
-        }}
-      >
-        Verse
-      </span>
-    </>
-  );
+  const content = <BrandLogo inverted style={{ width: isMobile ? 144 : 180 }} />;
   if (onClick) {
     return <button type="button" style={{ ...styles.wordmark, ...styles.wordmarkButton }} onClick={onClick} aria-label={ariaLabel}>{content}</button>;
   }
@@ -216,25 +205,7 @@ function UnifiedLanguageButton({ language, onChange }: { language: "zh" | "en"; 
 function LoginWordmark({ isMobile }: { isMobile: boolean }) {
   return (
     <span style={styles.loginWordmarkLoose}>
-      <span
-        style={{
-          fontFamily: '"Mr Dafoe Regular", cursive',
-          fontSize: isMobile ? 30 : 46,
-          lineHeight: 0.8,
-        }}
-      >
-        Story
-      </span>
-      <span
-        style={{
-          fontSize: isMobile ? 21 : 34,
-          fontWeight: 500,
-          letterSpacing: "0.01em",
-          marginLeft: isMobile ? 2 : 5,
-        }}
-      >
-        Verse
-      </span>
+      <BrandLogo inverted style={{ width: isMobile ? 154 : 238 }} />
     </span>
   );
 }
@@ -756,6 +727,14 @@ function Footer({ isMobile, language }: { isMobile: boolean; language: "zh" | "e
             <p style={styles.gatewayModalEyebrow}>StoryVerse Guide</p>
             <h2 style={styles.gatewayModalTitle}>{t.footerHowItWorksTitle}</h2>
             <p style={styles.gatewayModalBody}>{t.footerHowItWorksBody}</p>
+            <div style={styles.guideSteps}>
+              {t.footerHowItWorksSteps.map((step, index) => (
+                <div key={step} style={styles.guideStepItem}>
+                  <span style={styles.guideStepIndex}>{index + 1}</span>
+                  <p style={styles.guideStepText}>{step}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -958,9 +937,10 @@ const styles: Record<string, CSSProperties> = {
   },
   wordmark: {
     display: "inline-flex",
-    alignItems: "baseline",
+    alignItems: "center",
     color: "#fff",
     pointerEvents: "auto",
+    lineHeight: 1,
   },
   wordmarkButton: {
     border: 0,
@@ -1332,9 +1312,10 @@ const styles: Record<string, CSSProperties> = {
   },
   loginWordmarkLoose: {
     display: "inline-flex",
-    alignItems: "baseline",
+    alignItems: "center",
     color: "#fff",
     whiteSpace: "nowrap",
+    lineHeight: 1,
   },
   loginBody: {
     maxWidth: 520,
@@ -1387,7 +1368,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.38)",
     background: "rgba(255,255,255,0.82)",
     color: "rgba(20,20,20,0.42)",
-    fontSize: 15,
+    fontSize: "clamp(12px, 1.08vw, 15px)",
     fontWeight: 500,
   },
   primaryButton: {
@@ -1515,6 +1496,39 @@ const styles: Record<string, CSSProperties> = {
     color: "rgba(255,255,255,0.76)",
     fontSize: 14,
     lineHeight: 1.75,
+  },
+  guideSteps: {
+    display: "grid",
+    gap: 12,
+    marginTop: 22,
+  },
+  guideStepItem: {
+    display: "grid",
+    gridTemplateColumns: "34px 1fr",
+    gap: 12,
+    alignItems: "start",
+    padding: "14px 14px 14px 12px",
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.26)",
+    background: "rgba(255,255,255,0.12)",
+  },
+  guideStepIndex: {
+    width: 34,
+    height: 34,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.9)",
+    color: "#0798d9",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  guideStepText: {
+    margin: 0,
+    color: "rgba(255,255,255,0.84)",
+    fontSize: 13,
+    lineHeight: 1.62,
+    fontWeight: 600,
   },
   resetModal: {
     width: "min(560px, 92vw)",

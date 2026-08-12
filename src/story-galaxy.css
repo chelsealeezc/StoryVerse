@@ -149,18 +149,13 @@
   cursor: pointer;
 }
 
-.storyverse-root[data-theme="day"] .brand {
-  color: rgba(36, 26, 18, 0.9);
-  text-shadow: 0 8px 28px rgba(82, 56, 36, 0.16);
+.brand .brand-logo {
+  width: clamp(128px, 10vw, 180px);
+  filter: brightness(0) invert(1) drop-shadow(0 8px 22px rgba(255,255,255,0.08));
 }
 
-.brand span {
-  display: inline-block;
-  margin-right: -4px;
-  font-family: "Mr Dafoe Regular", cursive;
-  font-size: 36px;
-  line-height: 0.8;
-  transform: rotate(-4deg);
+.storyverse-root[data-theme="day"] .brand .brand-logo {
+  filter: drop-shadow(0 8px 28px rgba(82, 56, 36, 0.16));
 }
 
 .header-actions {
