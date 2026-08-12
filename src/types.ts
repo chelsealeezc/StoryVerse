@@ -2,6 +2,33 @@ export type Theme = "家庭" | "成长" | "迁移" | "关系" | "工作" | "身�
 export type ResonanceMode = "similar" | "different";
 export type Reaction = "like" | "dislike" | null;
 export type Language = "zh" | "en";
+export type ThemeReviewStatus = "approved" | "pending_review";
+
+export interface StoryEmotionTag {
+  value: string;
+  labelZh: string;
+  labelEn?: string;
+}
+
+export interface StoryEventTypeTag {
+  parentType: string;
+  parentLabelZh: string;
+  subtype: string;
+  value: string;
+  labelEn: string;
+  labelZh: string;
+}
+
+export interface StoryThemeTag {
+  value: string;
+  status: ThemeReviewStatus;
+}
+
+export interface StoryTagSet {
+  emotions: StoryEmotionTag[];
+  eventType: StoryEventTypeTag;
+  themes: StoryThemeTag[];
+}
 
 export interface Story {
   id: string;
@@ -17,6 +44,7 @@ export interface Story {
   perspective: string;
   people: string[];
   readMinutes: number;
+  tags?: StoryTagSet;
   visualStatus: "ready" | "generating" | "failed" | "blocked";
   x: number;
   y: number;
@@ -64,6 +92,7 @@ export interface Analysis {
     perspective: string[];
   };
   arc: string[];
+  storyTags?: StoryTagSet;
 }
 
 /** 进入人工审核区的三种来源 */

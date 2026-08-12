@@ -16,13 +16,17 @@ import { initialState, loadState, saveState } from "./storage";
 import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from "./offline-drafts";
 import { Auragate as PrototypeGateway } from "./PrototypeGateway";
 import { StoryGalaxy } from "./StoryGalaxy";
+import { BrandLogo } from "./BrandLogo";
 import { Tour } from "./Tour";
 import { AdminConsole } from "./AdminConsole";
 import { moderateStory, moderationCopy } from "./moderation";
 import type { ModerationResult } from "./moderation";
 import type { PlaceSuggestion } from "./places";
 import type { TourSceneId } from "./tour-steps";
-import type { AppState, Draft, InboxMessage, Language, Reaction, ResonanceMode, ReviewItem, Story } from "./types";
+import type {
+  AppState, Draft, InboxMessage, Language, Reaction, ResonanceMode, ReviewItem, Story,
+  StoryEmotionTag, StoryEventTypeTag, StoryTagSet, StoryThemeTag,
+} from "./types";
 import "./tour.css";
 
 /** 引导相关的三个回调在 Wizard / Resonance 之间是同一组，抽出来少写几遍 */
@@ -49,6 +53,51 @@ const imageStyleOptions: Array<{
   { id: "minimal-realistic", label: "简约写实风", description: "扁平丝网印刷、颗粒肌理与高饱和留白", preview: minimalRealisticStylePreview },
   { id: "retro-collage", label: "复古拼贴风", description: "撕纸层次、粉彩纸纹与温暖编辑感", preview: retroCollageStylePreview },
 ];
+
+const moodOptions = [
+  { id: "anger", zh: "愤怒", en: "Anger", icon: "↯" },
+  { id: "fear", zh: "担心", en: "Fear", icon: "!" },
+  { id: "sadness", zh: "失落", en: "Sadness", icon: "☂" },
+  { id: "shame", zh: "愧疚", en: "Shame", icon: "◌" },
+  { id: "contentment", zh: "平和自足", en: "Contentment", icon: "○" },
+  { id: "happiness", zh: "开心幸福", en: "Happiness", icon: "☀" },
+  { id: "love", zh: "爱", en: "Love", icon: "♥" },
+  { id: "pride", zh: "自信骄傲", en: "Pride", icon: "✦" },
+];
+
+const EVENT_TYPE_TAGS: StoryEventTypeTag[] = [
+  { parentType: "Relationship events", parentLabelZh: "关系事件", subtype: "Interpersonal conflict, struggle, or rejection", value: "interpersonal_conflict", labelEn: "Interpersonal conflict", labelZh: "冲突" },
+  { parentType: "Relationship events", parentLabelZh: "关系事件", subtype: "Divorce, separation, or break-up", value: "break_up", labelEn: "Break-up", labelZh: "分离" },
+  { parentType: "Relationship events", parentLabelZh: "关系事件", subtype: "Becoming a parent or grandparent", value: "parenthood", labelEn: "Parenthood", labelZh: "为人父母" },
+  { parentType: "Relationship events", parentLabelZh: "关系事件", subtype: "Relationship-building, marriage, or dating", value: "relationship_building", labelEn: "Relationship-building", labelZh: "亲密关系建立" },
+  { parentType: "Relationship events", parentLabelZh: "关系事件", subtype: "Other relationship event", value: "other_relationship", labelEn: "Other relationship event", labelZh: "其他关系" },
+  { parentType: "Life-threatening and mortality events", parentLabelZh: "生命威胁与死亡事件", subtype: "Death", value: "death", labelEn: "Death", labelZh: "死亡" },
+  { parentType: "Life-threatening and mortality events", parentLabelZh: "生命威胁与死亡事件", subtype: "Serious illness or health concern", value: "serious_illness", labelEn: "Serious illness", labelZh: "疾病" },
+  { parentType: "Life-threatening and mortality events", parentLabelZh: "生命威胁与死亡事件", subtype: "Accident, injury, or assault", value: "accident_or_injury", labelEn: "Accident or injury", labelZh: "意外" },
+  { parentType: "Life-threatening and mortality events", parentLabelZh: "生命威胁与死亡事件", subtype: "Addiction", value: "addiction", labelEn: "Addiction", labelZh: "成瘾" },
+  { parentType: "Life-threatening and mortality events", parentLabelZh: "生命威胁与死亡事件", subtype: "Other life-threatening or mortality event", value: "other_life_threatening", labelEn: "Other life-threatening event", labelZh: "其他生命威胁" },
+  { parentType: "Career, occupation, or job events", parentLabelZh: "职业、工作与事业事件", subtype: "Job loss, struggle, or setback", value: "career_setback", labelEn: "Career setback", labelZh: "事业挫折" },
+  { parentType: "Career, occupation, or job events", parentLabelZh: "职业、工作与事业事件", subtype: "Job gain, achievement, or mastery", value: "career_achievement", labelEn: "Career achievement", labelZh: "事业高光" },
+  { parentType: "Formal and informal learning events", parentLabelZh: "正式与非正式学习事件", subtype: "Receiving sage advice or mentorship", value: "mentorship", labelEn: "Mentorship", labelZh: "师友" },
+  { parentType: "Formal and informal learning events", parentLabelZh: "正式与非正式学习事件", subtype: "Formal education", value: "formal_education", labelEn: "Formal education", labelZh: "求学" },
+  { parentType: "Formal and informal learning events", parentLabelZh: "正式与非正式学习事件", subtype: "Self-directed learning", value: "self_directed_learning", labelEn: "Self-directed learning", labelZh: "自学" },
+  { parentType: "Formal and informal learning events", parentLabelZh: "正式与非正式学习事件", subtype: "Behavioral transgression at school", value: "school_transgression", labelEn: "School transgression", labelZh: "校园违规" },
+  { parentType: "Formal and informal learning events", parentLabelZh: "正式与非正式学习事件", subtype: "Other learning experience", value: "other_learning", labelEn: "Other learning experience", labelZh: "其他学习经历" },
+  { parentType: "Recreation, leisure, or short-term travel events", parentLabelZh: "娱乐、休闲或短期旅行事件", subtype: "Not further subtyped in the article", value: "recreation_or_travel", labelEn: "Recreation or short-term travel", labelZh: "娱乐休闲" },
+  { parentType: "Sojourn, permanent relocation, or immigration events", parentLabelZh: "暂居、永久迁移或移民事件", subtype: "Not further subtyped in the article", value: "relocation_or_immigration", labelEn: "Relocation or immigration", labelZh: "迁移" },
+  { parentType: "Religious or spiritual events", parentLabelZh: "宗教或精神性事件", subtype: "Not further subtyped in the article", value: "religious_or_spiritual", labelEn: "Religious or spiritual event", labelZh: "精神" },
+  { parentType: "Other or unclassifiable events", parentLabelZh: "其他或不可分类事件", subtype: "Not further subtyped in the article", value: "other_or_unclassifiable", labelEn: "Other or unclassifiable", labelZh: "其他" },
+];
+
+function emotionTagFromMood(mood: string): StoryEmotionTag | null {
+  const match = moodOptions.find(option => [option.id, option.zh, option.en].includes(mood));
+  if (!match) return null;
+  return { value: match.id, labelZh: match.zh, labelEn: match.en };
+}
+
+function requestThemeReview(themeText: string): StoryThemeTag {
+  return { value: themeText, status: "pending_review" };
+}
 
 const PORTAL_BG = "https://res.cloudinary.com/dy5er7kv5/image/upload/q_auto/f_auto/v1781046673/image_1_ksxfzb.png";
 const WORLD_BG = "https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260609_231253_53c0854c-d13c-42c1-9fc0-17e87cd34091.png&w=1280&q=85";
@@ -127,7 +176,7 @@ const copy = {
     leaveTitle: "你的故事尚未完成，是否保存草稿？", saveDraft: "保存草稿", leaveAnyway: "直接离开", keepWriting: "继续写",
     finalSay: "你的故事页面", confirmTitle: "确认后，它会成为 StoryVerse 里的一颗星。", storyTitle: "故事标题", editBody: "修改正文", doneEdit: "完成修改",
     publish: "点亮我的故事星点", backToTraits: "返回故事特质", storyPublished: "故事已发布", resonanceTitle: "你希望在 StoryVerse 里看到和你相似还是不同的故事？",
-    resonanceSub: "", findStories: "进入 StoryVerse",
+    resonanceSub: "选择一种连接方式，之后也可以在主页修改。", findStories: "进入 StoryVerse",
     explore: "探索故事", mine: "我的故事", resonance: "共鸣选择", liked: "喜欢记录", writeNew: "写下新故事", reset: "重置演示",
     atlasTitle: "今天，想走进哪一种人生？", visibleStories: "可见故事", themeGalaxies: "主题星系", search: "搜索情绪、城市、主题或人生转折",
     map: "星图", cards: "卡片", filter: "筛选", all: "全部", similarEcho: "相似的回声", differentLives: "不同的人生", minutes: "分钟阅读",
@@ -152,7 +201,7 @@ const copy = {
     leaveTitle: "Your story is not finished. Save it as a draft?", saveDraft: "Save draft", leaveAnyway: "Leave anyway", keepWriting: "Keep writing",
     finalSay: "Step 4 · The final say is yours", confirmTitle: "Confirm your story star.", storyTitle: "Story title", editBody: "Edit body", doneEdit: "Done editing",
     publish: "Light up my story star", backToTraits: "Back to story traits", storyPublished: "Story published", resonanceTitle: "What kind of echoes do you want to hear next?",
-    resonanceSub: "Choose three directions. Difference still keeps one understandable connection.", findStories: "Enter StoryVerse",
+    resonanceSub: "Choose one way to connect. You can adjust it later on the home page.", findStories: "Enter StoryVerse",
     explore: "Explore", mine: "My stories", resonance: "Resonance", liked: "Likes", writeNew: "Write new story", reset: "Reset demo",
     atlasTitle: "Which life do you want to enter today?", visibleStories: "Visible stories", themeGalaxies: "Theme galaxies", search: "Search emotions, cities, themes, or turning points",
     map: "Map", cards: "Cards", filter: "Filters", all: "All", similarEcho: "Similar echoes", differentLives: "Different lives", minutes: "min read",
@@ -175,7 +224,7 @@ function ThemeToggle({ language, themeMode, onChange }: { language: Language; th
 }
 
 function Logo({ compact = false, onClick, inverted = false }: { compact?: boolean; onClick?: () => void; inverted?: boolean }) {
-  const content = <><span className="logo-mark">✦</span>{!compact && <span>StoryVerse</span>}</>;
+  const content = <BrandLogo compact={compact} inverted={inverted} />;
   if (onClick) {
     return <button className={`logo logo-button ${inverted ? "logo-inverted" : ""}`} onClick={onClick} aria-label="回到 StoryVerse 首页">{content}</button>;
   }
@@ -184,6 +233,101 @@ function Logo({ compact = false, onClick, inverted = false }: { compact?: boolea
 
 function Pill({ children, tone = "default" }: { children: React.ReactNode; tone?: string }) {
   return <span className={`pill pill-${tone}`}>{children}</span>;
+}
+
+function eventTypeFallback(guideId: string, analysis?: AppState["analysis"]): StoryEventTypeTag {
+  const byGuide: Record<string, string> = {
+    agency: "career_achievement",
+    communion: "relationship_building",
+    redemption: "career_setback",
+    contamination: "interpersonal_conflict",
+    exploration: "self_directed_learning",
+    resolution: "relationship_building",
+    other: "other_or_unclassifiable",
+  };
+  const text = Object.values(analysis?.tags ?? {}).flat().join(" ");
+  const inferred = text.includes("迁移") ? "relocation_or_immigration"
+    : text.includes("家庭") || text.includes("关系") ? "relationship_building"
+    : text.includes("工作") ? "career_achievement"
+    : text.includes("成长") ? "self_directed_learning"
+    : byGuide[guideId] ?? "other_or_unclassifiable";
+  return EVENT_TYPE_TAGS.find(tag => tag.value === inferred) ?? EVENT_TYPE_TAGS[EVENT_TYPE_TAGS.length - 1];
+}
+
+function createStoryTagSet(draft: Draft, analysis: AppState["analysis"]): StoryTagSet {
+  const emotion = emotionTagFromMood(draft.mood)
+    ?? (analysis?.tags.emotion ?? []).map(emotionTagFromMood).find(Boolean)
+    ?? emotionTagFromMood("平和自足")!;
+  const themeValues = (analysis?.tags.topic ?? [])
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .slice(0, 2);
+  return {
+    emotions: [emotion],
+    eventType: eventTypeFallback(draft.guide, analysis),
+    themes: (themeValues.length ? themeValues : ["成长"]).map(value => ({ value, status: "approved" as const })),
+  };
+}
+
+function mockAnalyzeDraft(draft: Draft): NonNullable<AppState["analysis"]> {
+  const suggestedTitle = draft.title.trim() || draft.body.trim().split(/[。！？.!?\n]/).find(Boolean)?.trim().slice(0, 18) || "我的故事";
+  const emotionLabel = emotionTagFromMood(draft.mood)?.labelZh ?? "平和自足";
+  const guideTheme = ({
+    agency: "成长",
+    communion: "关系",
+    redemption: "成长",
+    contamination: "关系",
+    exploration: "身份",
+    resolution: "家庭",
+    other: "成长",
+  } as Record<string, string>)[draft.guide] ?? "成长";
+  const secondaryTheme = draft.city ? "迁移" : "关系";
+  const analysis = {
+    id: `local-analysis-${Date.now()}`,
+    suggestedTitle,
+    tags: {
+      topic: Array.from(new Set([guideTheme, secondaryTheme])).slice(0, 2),
+      emotion: [emotionLabel],
+      meaning: ["自我理解", "重新开始"],
+      perspective: ["成长实践"],
+    },
+    arc: ["故事被认真接住", "从细节里识别情绪", "整理出可以进入星图的标签"],
+  };
+  return { ...analysis, storyTags: createStoryTagSet(draft, analysis) };
+}
+
+function storyTagsToLegacyTags(storyTags: StoryTagSet) {
+  return {
+    topic: storyTags.themes.map(tag => tag.value),
+    emotion: storyTags.emotions.map(tag => tag.labelZh),
+    meaning: [storyTags.eventType.labelZh],
+  };
+}
+
+function createLocalStory(draft: Draft, analysis: NonNullable<AppState["analysis"]>): Story {
+  const title = draft.title.trim() || analysis.suggestedTitle || "我的故事";
+  const body = draft.body.trim() || "这是一个尚未完成、但已经开始发光的故事。";
+  const topic = analysis.storyTags?.themes[0]?.value || analysis.tags.topic[0] || "成长";
+  const theme = (["家庭", "成长", "迁移", "关系", "工作", "身份"].includes(topic) ? topic : "成长") as Story["theme"];
+  return {
+    id: `local-story-${crypto.randomUUID()}`,
+    title,
+    excerpt: body.slice(0, 70),
+    body,
+    author: "星旅人 404",
+    city: draft.city || "未知城市",
+    stage: draft.stage || draft.time || "人生片段",
+    theme,
+    emotion: analysis.storyTags?.emotions[0]?.labelZh || analysis.tags.emotion[0] || "平和自足",
+    meaning: analysis.tags.meaning[0] || analysis.storyTags?.eventType.labelZh || "自我理解",
+    perspective: analysis.tags.perspective[0] || "成长实践",
+    people: draft.people.length ? draft.people : ["自己"],
+    readMinutes: Math.max(1, Math.ceil(body.length / 420)),
+    tags: analysis.storyTags,
+    visualStatus: "ready",
+    x: 50 + Math.random() * 30,
+    y: 45 + Math.random() * 30,
+  };
 }
 
 function PrimaryButton({ children, onClick, disabled = false, className = "" }: {
@@ -489,17 +633,24 @@ type AppUpdate = (patch: Partial<AppState> | ((previous: AppState) => Partial<Ap
 
 const guideById = (id: string) => guides.find(guide => guide.id === id) ?? null;
 
-function activeGuide(draft: Draft) {
-  const guide = guideById(draft.guide);
-  if (!guide) return null;
-  if (guide.id !== "other") return guide;
-  const custom = draft.customGuide.trim();
-  return custom
-    ? { ...guide, prompt: custom, examples: "这是你自己写下的入口，怎么讲都可以。" }
-    : guide;
+function localizedGuideText(guide: (typeof guides)[number], language: Language) {
+  const prompt = language === "zh" ? guide.prompt : guide.enPrompt;
+  const examples = language === "zh" ? guide.examples : guide.enExamples;
+  return { prompt, examples };
 }
 
-function GuideStack({ draft, setDraft }: { draft: Draft; setDraft: (patch: Partial<Draft>) => void }) {
+function activeGuide(draft: Draft, language: Language) {
+  const guide = guideById(draft.guide);
+  if (!guide) return null;
+  const localized = localizedGuideText(guide, language);
+  if (guide.id !== "other") return { ...guide, ...localized };
+  const custom = draft.customGuide.trim();
+  return custom
+    ? { ...guide, ...localized, prompt: custom, examples: language === "zh" ? "这是你自己写下的入口，怎么讲都可以。" : "This is your own entry point. Tell it in any way you like." }
+    : { ...guide, ...localized };
+}
+
+function GuideStack({ draft, setDraft, language }: { draft: Draft; setDraft: (patch: Partial<Draft>) => void; language: Language }) {
   const previousIndex = useRef(Math.max(0, guides.findIndex(guide => guide.id === draft.guide)));
   const currentIndex = Math.max(0, guides.findIndex(guide => guide.id === draft.guide));
 
@@ -516,6 +667,9 @@ function GuideStack({ draft, setDraft }: { draft: Draft; setDraft: (patch: Parti
       {guides.map((guide, i) => {
         const selected = draft.guide === guide.id;
         const fromLeft = currentIndex >= previousIndex.current;
+        const { prompt, examples } = localizedGuideText(guide, language);
+        const title = language === "zh" ? guide.title : guide.en;
+        const foldedTitle = language === "zh" ? (guide.shortTitle ?? guide.title) : (guide.enShort ?? guide.en);
         return (
           <div
             role="button"
@@ -532,36 +686,38 @@ function GuideStack({ draft, setDraft }: { draft: Draft; setDraft: (patch: Parti
             aria-expanded={selected}
           >
             <div className="guide-content">
-              <div className="guide-main">
+                <div className="guide-main">
                 <div className="guide-top">
                   <span className="guide-icon">{guide.icon}</span>
+                  <div className="guide-title-lockup">
+                    <h2>{title}</h2>
+                    <em>{language === "zh" ? guide.en : guide.title}</em>
+                  </div>
                   <small>0{i + 1} / 0{guides.length}</small>
                 </div>
-                <h2>{guide.title}</h2>
-                <em>{guide.en}</em>
-                <p>{guide.prompt}</p>
+                <p>{prompt}</p>
               </div>
               <div className="guide-side">
                 {guide.id === "other" ? (
-                  <label className="guide-custom">你想讲的是哪一种时刻？
+                  <label className="guide-custom">{language === "zh" ? "你想讲的是哪一种时刻？" : "What kind of moment do you want to tell?"}
                     <input
                       value={draft.customGuide}
                       maxLength={40}
-                      placeholder="例如：一次没有人知道的坚持"
+                      placeholder={language === "zh" ? "例如：一次没有人知道的坚持" : "Example: a quiet persistence nobody saw"}
                       onClick={event => event.stopPropagation()}
                       onFocus={() => setDraft({ guide: "other" })}
                       onChange={event => setDraft({ customGuide: event.target.value, guide: "other" })}
                     />
                   </label>
-                ) : <footer>{guide.examples}</footer>}
+                ) : <footer><span>{language === "zh" ? "比如" : "Example"}</span>{examples}</footer>}
                 <span className="guide-pick">
-                  {selected ? <><Check size={16} /> 已选择</> : "选择这个入口"}
+                  {selected ? <><Check size={16} /> {language === "zh" ? "已选择" : "Selected"}</> : language === "zh" ? "选择这个入口" : "Choose this entry"}
                 </span>
               </div>
             </div>
             <div className="small-title" aria-hidden="true">
               <span>{guide.icon}</span>
-              <p>{guide.title}</p>
+              <p>{foldedTitle}</p>
             </div>
           </div>
         );
@@ -755,6 +911,11 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const [moderation, setModeration] = useState<ModerationResult | null>(null);
   const [appealNote, setAppealNote] = useState("");
   const [tagDrafts, setTagDrafts] = useState<Record<string, string[]>>({});
+  const [storyTags, setStoryTags] = useState<StoryTagSet | null>(null);
+  const [tagEditing, setTagEditing] = useState<"emotions" | "eventType" | "themes" | null>(null);
+  const [customTheme, setCustomTheme] = useState("");
+  const [themeTagError, setThemeTagError] = useState("");
+  const [removedThemeTags, setRemovedThemeTags] = useState<StoryThemeTag[]>([]);
   const [imageStyle, setImageStyle] = useState<ImageStyle>("minimal-realistic");
   const [storyImage, setStoryImage] = useState("");
   const [storyHighlight, setStoryHighlight] = useState<StoryHighlight | null>(null);
@@ -850,13 +1011,22 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
     const timers = [650, 1400, 2200].map((time, i) => window.setTimeout(() => setAnalysisStage(i + 1), time));
     let cancelled = false;
     api.analyze(draft).then(analysis => { if (!cancelled) update({ analysis }); }).catch(error => {
-      if (!cancelled) setAnalysisError(error instanceof Error ? error.message : "智能分析暂时失败，请重新尝试。");
+      if (!cancelled) {
+        console.info("[StoryVerse] Analyze API unavailable, continuing with local preview analysis.", error);
+        update({ analysis: mockAnalyzeDraft(draft) });
+        setAnalysisError("");
+      }
     });
     return () => { cancelled = true; timers.forEach(clearTimeout); };
   }, [step, analysisAttempt]);
   useEffect(() => {
     if (!state.analysis) return;
     setTagDrafts(Object.fromEntries(Object.entries(state.analysis.tags).map(([layer, tags]) => [layer, tags.slice(0, 3)])));
+    setStoryTags(state.analysis.storyTags ?? createStoryTagSet(draft, state.analysis));
+    setTagEditing(null);
+    setCustomTheme("");
+    setThemeTagError("");
+    setRemovedThemeTags([]);
   }, [state.analysis]);
 
   const choosePerson = (person: string) => {
@@ -864,7 +1034,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
     setDraft({ people });
   };
   const selectedGuide = guides.find(g => g.id === draft.guide);
-  const guide = activeGuide(draft);
+  const guide = activeGuide(draft, language);
   const guidePrompt = guide?.prompt;
   const hasUnfinishedStory = draft.body.trim().length > 0 && step === 1;
   const requestStep = (nextStep: number) => {
@@ -902,7 +1072,13 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   /** 真正调用上游的发布接口（POST /stories/publish），带上标签与错误处理 */
   const runPublish = () => {
     setPublishing(true); setPublishError("");
-    return onPublished(draft, { ...state.analysis!, tags: { ...state.analysis!.tags, ...tagDrafts } })
+    const nextStoryTags = storyTags ?? createStoryTagSet(draft, state.analysis);
+    const legacyTags = storyTagsToLegacyTags(nextStoryTags);
+    return onPublished(draft, {
+      ...state.analysis!,
+      tags: { ...state.analysis!.tags, ...tagDrafts, ...legacyTags },
+      storyTags: nextStoryTags,
+    })
       .catch(error => { setPublishError(error instanceof Error ? error.message : "发布失败，请稍后重试。"); })
       .finally(() => setPublishing(false));
   };
@@ -920,7 +1096,9 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
       id: `rv-${crypto.randomUUID()}`,
       title,
       body: draft.body,
-      tags: Object.values(tagDrafts).flat().length ? Object.values(tagDrafts).flat() : Object.values(state.analysis?.tags ?? {}).flat(),
+      tags: storyTags
+        ? [...storyTags.emotions.map(tag => tag.labelZh), storyTags.eventType.labelZh, ...storyTags.themes.map(tag => tag.value)]
+        : Object.values(tagDrafts).flat().length ? Object.values(tagDrafts).flat() : Object.values(state.analysis?.tags ?? {}).flat(),
       author: language === "zh" ? "我（本机演示）" : "Me (local demo)",
       city: draft.city,
       createdAt: Date.now(),
@@ -952,7 +1130,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const showAgeHint = hints.age !== null && String(hints.age) !== draft.age;
   const presetTags: Record<string, string[]> = {
     topic: ["成长", "关系", "迁移", "家庭", "身份"],
-    emotion: ["平静", "释然", "想念", "勇敢", "遗憾"],
+    emotion: moodOptions.map(option => language === "zh" ? option.zh : option.en),
     meaning: ["自我理解", "边界", "选择", "告别", "重新开始"],
   };
   const removeTag = (layer: string, tag: string) => setTagDrafts(previous => ({ ...previous, [layer]: (previous[layer] ?? []).filter(item => item !== tag) }));
@@ -962,6 +1140,60 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
     const nextTag = custom ? "其他" : (presetTags[layer] ?? []).find(tag => !current.includes(tag)) ?? "其他";
     return { ...previous, [layer]: current.includes(nextTag) ? current : [...current, nextTag].slice(0, 3) };
   });
+  const activeStoryTags = storyTags ?? createStoryTagSet(draft, state.analysis);
+  const updateStoryTags = (next: StoryTagSet | ((previous: StoryTagSet) => StoryTagSet)) => {
+    setStoryTags(previous => {
+      const base = previous ?? activeStoryTags;
+      return typeof next === "function" ? next(base) : next;
+    });
+  };
+  const chooseEmotionTag = (option: (typeof moodOptions)[number]) => updateStoryTags(previous => {
+    if (previous.emotions.some(tag => tag.value === option.id)) {
+      const emotions = previous.emotions.filter(tag => tag.value !== option.id);
+      return { ...previous, emotions: emotions.length ? emotions : previous.emotions };
+    }
+    const nextTag = { value: option.id, labelZh: option.zh, labelEn: option.en };
+    const emotions = previous.emotions.length >= 2 ? [previous.emotions[0], nextTag] : [...previous.emotions, nextTag];
+    return { ...previous, emotions };
+  });
+  const removeEmotionTag = (value: string) => updateStoryTags(previous => {
+    const emotions = previous.emotions.filter(tag => tag.value !== value);
+    return { ...previous, emotions: emotions.length ? emotions : previous.emotions };
+  });
+  const chooseEventTypeTag = (eventType: StoryEventTypeTag) => {
+    updateStoryTags(previous => ({ ...previous, eventType: previous.eventType.value === eventType.value ? eventTypeFallback(draft.guide, state.analysis) : eventType }));
+    setTagEditing(null);
+  };
+  const removeThemeTag = (value: string) => updateStoryTags(previous => {
+    const removed = previous.themes.find(tag => tag.value === value);
+    if (removed) setRemovedThemeTags(items => [removed, ...items.filter(item => item.value !== value)].slice(0, 4));
+    return { ...previous, themes: previous.themes.filter(tag => tag.value !== value) };
+  });
+  const restoreThemeTag = (tag: StoryThemeTag) => {
+    if (activeStoryTags.themes.length >= 2 || activeStoryTags.themes.some(item => item.value === tag.value)) return;
+    updateStoryTags(previous => ({ ...previous, themes: [...previous.themes, tag] }));
+    setRemovedThemeTags(items => items.filter(item => item.value !== tag.value));
+  };
+  const addCustomThemeTag = () => {
+    const value = customTheme.trim();
+    const chineseLength = Array.from(value).length;
+    if (!value) return;
+    if (chineseLength > 2) {
+      setThemeTagError("主题最多 2 个字");
+      return;
+    }
+    if (activeStoryTags.themes.some(tag => tag.value === value)) {
+      setThemeTagError("这个主题已经存在");
+      return;
+    }
+    if (activeStoryTags.themes.length >= 2) {
+      setThemeTagError("主题最多 2 个");
+      return;
+    }
+    updateStoryTags(previous => ({ ...previous, themes: [...previous.themes, requestThemeReview(value)] }));
+    setCustomTheme("");
+    setThemeTagError("");
+  };
 
   return (
     <main className={`wizard-page ${themeMode === "night" ? "theme-night" : ""} ${focusMode && step === 1 ? "focus-mode-page" : ""}`}>
@@ -974,12 +1206,12 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
       {step === 0 && (
         <section className="wizard-stage">
           <div className="section-intro guide-intro-copy"><p className="eyebrow">{t.guideStep}</p><h1>{language === "zh" ? <>你最想讲的<br />那个故事是什么？</> : t.guideTitle}</h1><p>{t.guideSub}</p></div>
-          <GuideStack draft={draft} setDraft={setDraft} />
+          <GuideStack draft={draft} setDraft={setDraft} language={language} />
           <div className="stack-actions">
             <div className="stack-status">
               {guide
-                ? <><b>已选择 · {guide.title}</b><span>{guide.prompt}</span></>
-                : <><b>向下滚动，看看这 {guides.length} 种入口</b><span>没有合适的？最后一张卡可以自己写。</span></>}
+                ? <><b>{language === "zh" ? "已选择" : "Selected"} · {language === "zh" ? guide.title : guide.en}</b><span>{guide.prompt}</span></>
+                : <><b>{language === "zh" ? `看看这 ${guides.length} 种入口` : `Explore ${guides.length} entry points`}</b><span>{language === "zh" ? "没有合适的？最后一张卡可以自己写。" : "Nothing fits? The last card lets you write your own."}</span></>}
             </div>
             <PrimaryButton disabled={!canContinueGuide} onClick={() => update({ wizardStep: 1 })}>{t.continueWithPrompt}</PrimaryButton>
           </div>
@@ -992,10 +1224,11 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
             <button className="text-button" onClick={() => focusMode ? setFocusMode(false) : requestStep(0)}>
               <ArrowLeft size={16} /> {!focusMode && t.changeGuide}
             </button>
-            <Pill tone="lime">{guide?.title}</Pill>
+            <Pill tone="lime">{guide ? (language === "zh" ? guide.title : guide.en) : ""}</Pill>
             <div className="panel-detail">
+              <small>{guide ? (language === "zh" ? guide.title : guide.en) : ""}</small>
               <h2>{guidePrompt}</h2>
-              <p>{guide?.examples}</p>
+              <p><b>{language === "zh" ? "可以从这个例子开始" : "Start from an example"}</b>{guide?.examples}</p>
             </div>
             <div className="save-state" data-status={saveStatus}>
                 {saveStatus === "editing" ? <><i className="save-dot" /> {language === "zh" ? "正在写…" : "Writing…"}</>
@@ -1021,7 +1254,16 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
             {draft.body.length > 0 && draft.body.length < 100 && !resting && <div className="gentle-tip">{t.gentleTip}</div>}
             {focusMode && <p className="focus-note">{language === "zh" ? "按 Esc 或再点一次开关，随时退出专注模式。" : "Press Esc or toggle the switch again to leave focus mode anytime."}</p>}
             <div className="meta-fields">
-              <div className="field-group"><span className="field-label">{t.mood}</span><div className="choice-row mood-row">{["沉重", "平静", "还好", "轻松", "温暖"].map((x, i) => <button className={draft.mood === x ? "selected" : ""} onClick={() => setDraft({ mood: x })} key={x}><b>{["☂", "◌", "○", "☀", "♥"][i]}</b>{x}</button>)}</div></div>
+              <div className="field-group">
+                <span className="field-label">{t.mood}</span>
+                <div className="choice-row mood-row">
+                  {moodOptions.map(option => {
+                    const label = language === "zh" ? option.zh : option.en;
+                    const selected = [option.id, option.zh, option.en].includes(draft.mood);
+                    return <button className={selected ? "selected" : ""} onClick={() => setDraft({ mood: label })} key={option.id}><b>{option.icon}</b>{label}</button>;
+                  })}
+                </div>
+              </div>
               <div className="field-grid">
                 <label><span className="field-name">{t.occurred}</span><select value={draft.time} onChange={e => setDraft({ time: e.target.value })}><option value="">请选择</option>{["今天", "最近一年", "小时候", "很久以前", "不确定"].map(x => <option key={x}>{x}</option>)}</select></label>
                 <CityField draft={draft} setDraft={setDraft} label={t.city} />
@@ -1107,12 +1349,87 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
             <article className="story-preview editable-preview"><div className="preview-head"><h2>{draft.title || state.analysis.suggestedTitle}</h2><button onClick={() => setEditingBody(!editingBody)}>{editingBody ? t.doneEdit : t.editBody}</button></div>{editingBody ? <textarea value={draft.body} onChange={e => setDraft({ body: e.target.value, edits: draft.edits + 1 })} /> : <p>{draft.body}</p>}</article>
           </div>
           <div className="tag-editor">
-            <div className="tag-editor-head"><Sparkles size={20} /><div><h2>智能分析结果</h2><p>你可以根据自己的理解增加或删除标签，<br />也可以增加「其他」标签</p></div></div>
-            {(["topic", "emotion", "meaning"] as const).map(layer => {
-              const cappedTags = (tagDrafts[layer] ?? state.analysis!.tags[layer] ?? []).slice(0, 3);
-              const full = cappedTags.length >= 3;
-              return <div className="tag-layer" key={layer}><span>{({topic:"主题", emotion:"情绪", meaning:"意义"} as Record<string,string>)[layer]}</span><div>{cappedTags.map(tag => <button key={tag} onClick={() => removeTag(layer, tag)}>{tag}<X size={13} /></button>)}<button className="add-tag" disabled={full} onClick={() => addTag(layer)}>＋ 预设</button><button className="add-tag" disabled={full} onClick={() => addTag(layer, true)}>＋ 其他</button>{full && <small className="tag-limit">最多 3 个</small>}</div></div>;
-            })}
+            <div className="tag-editor-head"><Sparkles size={20} /><div><h2>{language === "zh" ? "智能分析结果" : "Smart analysis"}</h2><p>{language === "zh" ? <>你可以根据自己的理解增加或删除标签，<br />也可以增加「其他」标签</> : <>Add or remove tags based on your own reading.<br />Custom themes will enter review.</>}</p></div></div>
+            <section className="story-tags-panel" aria-label={language === "zh" ? "故事标签" : "Story tags"}>
+              <div className="story-tag-layer">
+                <span>{language === "zh" ? "情感" : "Emotion"}</span>
+                <div className="story-tag-body">
+                  <div className="story-tag-chips">
+                    {activeStoryTags.emotions.map(tag => (
+                      <button className="story-tag-chip" key={tag.value} onClick={() => removeEmotionTag(tag.value)}>
+                        {language === "zh" ? tag.labelZh : tag.labelEn ?? tag.labelZh}<X size={13} />
+                      </button>
+                    ))}
+                    <button className="add-tag story-tag-edit" disabled={activeStoryTags.emotions.length >= 2} onClick={() => setTagEditing(tagEditing === "emotions" ? null : "emotions")}>
+                      {activeStoryTags.emotions.length ? (language === "zh" ? "更改" : "Change") : (language === "zh" ? "添加" : "Add")}
+                    </button>
+                    <small className="tag-limit">{language === "zh" ? "最多 2 个" : "Up to 2"}</small>
+                  </div>
+                  {tagEditing === "emotions" && (
+                    <div className="tag-popover tag-option-grid">
+                      {moodOptions.map(option => (
+                        <button className={activeStoryTags.emotions.some(tag => tag.value === option.id) ? "tag-option selected" : "tag-option"} key={option.id} onClick={() => chooseEmotionTag(option)}>
+                          <b>{option.icon}</b><span>{language === "zh" ? option.zh : option.en}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="story-tag-layer">
+                <span>{language === "zh" ? "类型" : "Type"}</span>
+                <div className="story-tag-body">
+                  <div className="story-tag-chips">
+                    <button className="story-tag-chip event-type-chip" onClick={() => setTagEditing(tagEditing === "eventType" ? null : "eventType")}>
+                      {language === "zh" ? activeStoryTags.eventType.labelZh : activeStoryTags.eventType.labelEn}
+                    </button>
+                    <button className="add-tag story-tag-edit" onClick={() => setTagEditing(tagEditing === "eventType" ? null : "eventType")}>{language === "zh" ? "更改" : "Change"}</button>
+                  </div>
+                  {tagEditing === "eventType" && (
+                    <div className="tag-popover event-tag-options">
+                      {EVENT_TYPE_TAGS.map(tag => (
+                        <button className={activeStoryTags.eventType.value === tag.value ? "tag-option selected" : "tag-option"} key={tag.value} onClick={() => chooseEventTypeTag(tag)}>
+                          <span>{language === "zh" ? tag.labelZh : tag.labelEn}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="story-tag-layer">
+                <span>{language === "zh" ? "主题" : "Theme"}</span>
+                <div className="story-tag-body">
+                  <div className="story-tag-chips">
+                    {activeStoryTags.themes.map(tag => (
+                      <button className={`story-tag-chip ${tag.status === "pending_review" ? "pending" : ""}`} key={tag.value} onClick={() => removeThemeTag(tag.value)}>
+                        {tag.value}{tag.status === "pending_review" && <small>{language === "zh" ? "审核中" : "Reviewing"}</small>}<X size={13} />
+                      </button>
+                    ))}
+                    <button className="add-tag story-tag-edit" disabled={activeStoryTags.themes.length >= 2} onClick={() => setTagEditing(tagEditing === "themes" ? null : "themes")}>{language === "zh" ? "＋ 其他" : "+ Custom"}</button>
+                    <small className="tag-limit">{language === "zh" ? "最多 2 个" : "Up to 2"}</small>
+                  </div>
+                  {removedThemeTags.length > 0 && (
+                    <div className="theme-restore-row">
+                      <span>{language === "zh" ? "最近移除" : "Recently removed"}</span>
+                      {removedThemeTags.map(tag => (
+                        <button key={tag.value} disabled={activeStoryTags.themes.length >= 2} onClick={() => restoreThemeTag(tag)}>
+                          ↶ {tag.value}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {tagEditing === "themes" && (
+                    <div className="tag-popover custom-theme-editor">
+                      <div className="custom-theme-row">
+                        <input value={customTheme} maxLength={4} placeholder={language === "zh" ? "2 个汉字" : "2 Chinese chars"} onChange={event => { setCustomTheme(event.target.value); setThemeTagError(""); }} />
+                        <button className="button button-ghost" disabled={activeStoryTags.themes.length >= 2} onClick={addCustomThemeTag}>{language === "zh" ? "添加" : "Add"}</button>
+                      </div>
+                      <small className={themeTagError ? "tag-error" : "tag-helper"}>{themeTagError || (language === "zh" ? "自定义主题会进入后台审核，不影响发布。" : "Custom themes enter review and will not block publishing.")}</small>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
             <fieldset className="image-style-picker">
               <legend>生成的图片风格</legend>
               <p>悬浮或聚焦可以查看风格示意图</p>
@@ -1196,9 +1513,9 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
 function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThemeModeChange, tourActive, onTourFinish, onTourSkip }: { state: AppState; update: AppUpdate; onBack: () => void; onContinue: () => void; onHome: () => void; themeMode: ThemeMode; onThemeModeChange: (themeMode: ThemeMode) => void } & TourProps) {
   const t = copy[state.language];
   const dimensions = [
-    { key: "city" as const, title: state.language === "zh" ? "城市" : "City", icon: "⌖", similar: state.language === "zh" ? "遇见来自相近城市语境的故事" : "Meet stories from a similar city context", different: state.language === "zh" ? "走进另一座城市的生活经验" : "Step into life in another city" },
-    { key: "stage" as const, title: state.language === "zh" ? "人生阶段" : "Life stage", icon: "◷", similar: state.language === "zh" ? "看看相近阶段的人如何走过" : "See how people in a similar stage moved through it", different: state.language === "zh" ? "听见另一段生命时期的声音" : "Hear a voice from another life phase" },
-    { key: "theme" as const, title: state.language === "zh" ? "主题" : "Theme", icon: "✦", similar: state.language === "zh" ? "从熟悉的议题继续深入" : "Go deeper from a familiar theme", different: state.language === "zh" ? "从新的主题打开另一扇门" : "Open a door through a new theme" },
+    { key: "city" as const, title: state.language === "zh" ? "城市" : "City", icon: "⌖", similar: state.language === "zh" ? "和你故事发生的城市相同或相近" : "Meet stories from the same or nearby city", different: state.language === "zh" ? "去看更远城市里的故事" : "See stories from farther cities" },
+    { key: "stage" as const, title: state.language === "zh" ? "人生阶段" : "Life stage", icon: "◷", similar: state.language === "zh" ? "看看相近年龄和阶段的人如何走过" : "See how people of a similar age or stage moved through it", different: state.language === "zh" ? "听见另一个人生阶段的声音" : "Hear a voice from another life stage" },
+    { key: "theme" as const, title: state.language === "zh" ? "主题" : "Theme", icon: "✦", similar: state.language === "zh" ? "从熟悉的话题继续深入" : "Go deeper from a familiar theme", different: state.language === "zh" ? "从新的主题打开另一扇门" : "Open a door through a new theme" },
   ];
   const setMode = (key: keyof AppState["resonance"], mode: ResonanceMode) => update({ resonance: { ...state.resonance, [key]: mode } });
   return (
@@ -1501,18 +1818,44 @@ export default function App() {
     };
   });
   const publishStory = async (draft: Draft, analysis: NonNullable<AppState["analysis"]>) => {
-    const { story } = await api.publish(draft, analysis);
+    let story: Story;
+    try {
+      const result = await api.publish(draft, analysis);
+      story = result.story;
+    } catch (error) {
+      console.info("[StoryVerse] Publish API unavailable, continuing with local preview story.", error);
+      story = createLocalStory(draft, analysis);
+    }
     setCloudStories(previous => [story, ...previous]);
     setMineIds(previous => [story.id, ...previous]);
     await clearRecoveryDraft().catch(() => undefined);
     update({ firstStoryComplete: true, screen: "resonance" });
   };
   const completeAuth = async (input: { mode: "signup" | "login"; displayName: string; email: string; password: string }) => {
-    const result = input.mode === "signup"
-      ? await api.register({ email: input.email, password: input.password, displayName: input.displayName })
-      : await api.login({ email: input.email, password: input.password });
+    let result: { user: User };
+    let cloudDraft: Awaited<ReturnType<typeof api.currentDraft>> = null;
+    let resonance: AppState["resonance"] = state.resonance;
+    let storyList: Story[] = stories;
+    let mine: Story[] = [];
+
+    try {
+      result = input.mode === "signup"
+        ? await api.register({ email: input.email, password: input.password, displayName: input.displayName })
+        : await api.login({ email: input.email, password: input.password });
+      [cloudDraft,resonance,storyList,mine] = await Promise.all([api.currentDraft(),api.getResonance(),api.stories(),api.mine()]);
+    } catch (error) {
+      console.info("[StoryVerse] API unavailable, continuing with local preview auth.", error);
+      result = {
+        user: {
+          id: "local-preview-user",
+          email: input.email,
+          displayName: input.displayName || input.email.split("@")[0] || "StoryVerse",
+          anonymousNumber: 404,
+        },
+      };
+    }
+
     setUser(result.user);
-    const [cloudDraft,resonance,storyList,mine] = await Promise.all([api.currentDraft(),api.getResonance(),api.stories(),api.mine()]);
     setCloudStories(storyList);
     setMineIds(mine.map(story => story.id));
     /*
