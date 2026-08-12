@@ -1590,7 +1590,21 @@ function Recommendations({ state, update, onEnterAtlas, onHome, themeMode, onThe
   const [report, setReport] = useState<Story | null>(null);
   const [items, setItems] = useState<RecommendationItem[]>([]);
   const [loading, setLoading] = useState(true);
-  useEffect(() => { api.recommendations().then(batch => setItems(batch.items)).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    api.recommendations()
+      .then(batch => setItems(batch.items))
+      .catch(error => {
+        console.info("[StoryVerse] Recommendation API unavailable, using local preview stories.", error);
+        setItems(stories.slice(0, 5).map((story, index) => ({
+          id: `local-rec-${story.id}`,
+          story,
+          reason: state.language === "zh" ? "本地预览故事" : "Local preview story",
+          position: index + 1,
+          openedAt: null,
+        })));
+      })
+      .finally(() => setLoading(false));
+  }, [state.language]);
   const recommended = items.map(item => ({ ...item.story, reason: item.reason, recommendationItemId: item.id }));
   const open = (story: Story) => {
     if (!state.openedRecommendations.includes(story.id)) update({ openedRecommendations: [...state.openedRecommendations, story.id] });
@@ -1934,7 +1948,14 @@ export default function App() {
     />;
   }
   else if (state.screen === "wizard") content = <Wizard state={state} update={update} onPublished={publishStory} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
-  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => { void api.saveResonance(state.resonance).then(() => go("recommendations")); }} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
+  else if (state.screen === "resonance") content = <Resonance state={state} update={update} onBack={() => update({ screen: "wizard", wizardStep: 3 })} onContinue={() => {
+    /*
+     * GitHub Pages 线上只有静态前端，后端不可用时不能让导航卡死。
+     * 共鸣偏好先本地更新并尽力保存，用户点击后直接进入星图主页面。
+     */
+    void api.saveResonance(state.resonance).catch(error => console.info("[StoryVerse] Resonance API unavailable, continuing locally.", error));
+    go("atlas");
+  }} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} tourActive={tourActive} onTourFinish={finishTour} onTourSkip={skipTour} />;
   else if (state.screen === "recommendations") content = <Recommendations state={state} update={update} onEnterAtlas={() => go("atlas")} onHome={goHome} themeMode={themeMode} onThemeModeChange={setThemeMode} />;
   else content = <StoryGalaxy
     language={state.language}
