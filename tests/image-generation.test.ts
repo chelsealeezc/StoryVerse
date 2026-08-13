@@ -30,7 +30,9 @@ describe("single highlight image prompts", () => {
 
   it("builds three distinct text-to-image prompts without disallowed reference wording", () => {
     const prompts = IMAGE_STYLES.map(style => buildSingleImagePrompt(highlight, style));
-    expect(new Set(prompts).size).toBe(3);
+    // 按 id 取，避免以后增删风格时下标错位
+    const byStyle = Object.fromEntries(IMAGE_STYLES.map((style, i) => [style, prompts[i]]));
+    expect(new Set(prompts).size).toBe(IMAGE_STYLES.length);
     prompts.forEach(prompt => {
       expect(prompt).toContain("只生成一张图");
       expect(prompt).toContain("3:4 竖版");
@@ -38,12 +40,15 @@ describe("single highlight image prompts", () => {
       expect(prompt.length).toBeLessThan(5000);
       expect(prompt).not.toMatch(/attached image|武政谅|Take a small break|Soft little moment/i);
     });
-    expect(prompts[0]).toContain("儿童蜡笔与鼠标涂鸦");
-    expect(prompts[0]).toContain("不要日漫脸");
-    expect(prompts[1]).toContain("4–6 种实色油墨");
-    expect(prompts[1]).toContain("不要日漫");
-    expect(prompts[2]).toContain("撕纸纤维边");
-    expect(prompts[2]).toContain("不要普通数码插画");
+    // 蜡笔风已改为阿德曼式黏土定格动画，断言跟着换成新风格的判别词
+    expect(byStyle.crayon).toContain("黏土定格动画");
+    expect(byStyle.crayon).toContain("不要光滑塑料感");
+    expect(byStyle.zine).toContain("半调");
+    expect(byStyle.zine).toContain("不要彩色照片写实");
+    expect(byStyle["minimal-realistic"]).toContain("4–6 种实色油墨");
+    expect(byStyle["minimal-realistic"]).toContain("不要日漫");
+    expect(byStyle["retro-collage"]).toContain("撕纸纤维边");
+    expect(byStyle["retro-collage"]).toContain("不要普通数码插画");
   });
 
   it("adds explicit spatial choreography and story-specific exclusions when available", () => {

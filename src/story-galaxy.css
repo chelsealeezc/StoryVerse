@@ -504,7 +504,17 @@
   right: clamp(36px, 6vw, 92px);
   top: 50%;
   width: min(430px, 34vw);
-  min-height: 500px;
+  min-height: min(500px, calc(100vh - 40px));
+  /*
+   * 卡片是 fixed + top:50% + translateY(-50%)，本身没有高度上限。
+   * 内容一超过视口，上下两头就同时溢出，而且没有滚动容器 ——
+   * 用户只能把整页缩小才看得全。这里给一个视口上限并允许内部滚动。
+   */
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.22) transparent;
   padding: 30px;
   transform: translateY(-50%);
   border: 1px solid rgba(255,255,255,0.18);
@@ -527,10 +537,10 @@
 .story-panel-close {
   position: absolute;
   z-index: 3;
-  top: 14px;
-  right: 14px;
-  width: 64px;
-  height: 64px;
+  top: 12px;
+  right: 12px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 50%;
@@ -558,11 +568,11 @@
   z-index: 4;
   top: -2px;
   right: -2px;
-  width: 128px;
-  height: 128px;
+  width: 76px;
+  height: 76px;
   border: 0;
   padding: 0;
-  border-radius: 0 0 0 92px;
+  border-radius: 0 0 0 56px;
   background: transparent;
   cursor: pointer;
   touch-action: manipulation;
@@ -588,8 +598,8 @@
 }
 
 .story-panel-close svg {
-  width: 26px;
-  height: 26px;
+  width: 16px;
+  height: 16px;
   pointer-events: none;
 }
 
@@ -646,10 +656,10 @@
 }
 
 .story-panel h2 {
-  margin: 26px 0 0;
+  margin: 18px 0 0;
   color: #fff;
-  font-size: 34px;
-  line-height: 1.16;
+  font-size: clamp(24px, 2.2vw, 30px);
+  line-height: 1.2;
   font-weight: 760;
 }
 
@@ -661,7 +671,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 24px 0 0;
+  margin: 16px 0 0;
   color: rgba(255,255,255,0.66);
   font-size: 15px;
   font-weight: 760;
@@ -680,15 +690,15 @@
 }
 
 .story-panel p:not(.story-panel-stats) {
-  margin: 24px 0 0;
+  margin: 16px 0 0;
   color: rgba(255,255,255,0.64);
-  font-size: 16px;
-  line-height: 1.82;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
 .story-panel-divider {
   height: 1px;
-  margin: 28px 0 20px;
+  margin: 20px 0 16px;
   background: rgba(255,255,255,0.13);
 }
 
@@ -729,8 +739,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 9px;
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: 18px;
+  padding-top: 16px;
   border-top: 1px solid rgba(255,255,255,0.12);
 }
 
@@ -1291,3 +1301,9 @@
 .storyverse-root[data-theme="day"] .inbox-status.is-pending { background: rgba(36,27,20,0.1); color: #5c5348; }
 .storyverse-root[data-theme="day"] .inbox-status.is-reviewing { background: #fdf3e3; color: #8a5a1b; }
 .storyverse-root[data-theme="day"] .inbox-status.is-resolved { background: #e2f4fd; color: #0a6f9c; }
+
+/* 卡片内滚动时的细滚动条，避免在深色玻璃质感上出现一条白条 */
+.story-panel::-webkit-scrollbar { width: 6px; }
+.story-panel::-webkit-scrollbar-track { background: transparent; }
+.story-panel::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(255,255,255,0.2); }
+.storyverse-root[data-theme="day"] .story-panel::-webkit-scrollbar-thumb { background: rgba(65,45,30,0.24); }

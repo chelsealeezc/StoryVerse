@@ -7,21 +7,44 @@ const PORTAL_BG = generatedPortalBg;
 const WORLD_BG =
   "https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260609_231253_53c0854c-d13c-42c1-9fc0-17e87cd34091.png&w=1280&q=85";
 
-const quotes = [
-  "你可能会看到和你天差地别的故事",
-  "也会发现那个远隔重洋的陌生朋友",
-  "和你当时的心境如此相似",
-  "和千万种声音共鸣",
-  "也看到不同的人生",
-  "每一个故事，都可能是一扇新的窗",
-  "欢迎来到这里",
-];
+/*
+ * 首屏轮播与开场文案。原本是纯中文硬编码 —— 英文用户第一眼就会看到中文，
+ * 所以改成按语言取。英文不是逐字翻译：中文这几句偏抒情、句式短，
+ * 直译会变得生硬，这里按同样的语气重写。
+ */
+const quotes = {
+  zh: [
+    "你可能会看到和你天差地别的故事",
+    "也会发现那个远隔重洋的陌生朋友",
+    "和你当时的心境如此相似",
+    "和千万种声音共鸣",
+    "也看到不同的人生",
+    "每一个故事，都可能是一扇新的窗",
+    "欢迎来到这里",
+  ],
+  en: [
+    "You'll find lives nothing like your own",
+    "And a stranger an ocean away",
+    "who once felt exactly as you did",
+    "Echo with a thousand voices",
+    "and see lives unlike yours",
+    "Every story can open a window",
+    "Welcome — you're here",
+  ],
+};
 
-const introSlides = [
-  ["有没有一件事", "即使过去很多年", "你仍然会向别人讲起？"],
-  ["有没有一个决定", "改变了你后来的人生？"],
-  ["欢迎来到这里", "和千万种声音共鸣", "也看到不同的人生"],
-];
+const introSlides = {
+  zh: [
+    ["有没有一件事", "即使过去很多年", "你仍然会向别人讲起？"],
+    ["有没有一个决定", "改变了你后来的人生？"],
+    ["欢迎来到这里", "和千万种声音共鸣", "也看到不同的人生"],
+  ],
+  en: [
+    ["Is there something", "you still tell people about", "years after it happened?"],
+    ["Was there a decision", "that changed everything after it?"],
+    ["Welcome — you're here", "echo with a thousand voices", "and see lives unlike yours"],
+  ],
+};
 
 const gatewayCopy = {
   zh: {
@@ -210,15 +233,16 @@ function LoginWordmark({ isMobile }: { isMobile: boolean }) {
   );
 }
 
-function PortalIntro({ isMobile, sceneOpacity }: { isMobile: boolean; sceneOpacity: number }) {
+function PortalIntro({ isMobile, sceneOpacity, language }: { isMobile: boolean; sceneOpacity: number; language: "zh" | "en" }) {
   const [active, setActive] = useState(0);
+  const slides = introSlides[language];
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setActive((value) => (value + 1) % introSlides.length);
+      setActive((value) => (value + 1) % slides.length);
     }, 3600);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [slides.length]);
 
   return (
     <div
@@ -229,7 +253,7 @@ function PortalIntro({ isMobile, sceneOpacity }: { isMobile: boolean; sceneOpaci
         transform: isMobile ? "translate(-50%, -51%) scale(0.86)" : "translate(-50%, -51%)",
       }}
     >
-      {introSlides.map((slide, index) => (
+      {slides.map((slide, index) => (
         <div
           key={slide.join("")}
           style={{
@@ -262,9 +286,10 @@ function Chevron({ dir }: { dir: -1 | 1 }) {
 }
 
 function ArcCardCarousel({ isMobile, language }: { isMobile: boolean; language: "zh" | "en" }) {
-  const [active, setActive] = useState(Math.floor(quotes.length / 2));
+  const lines = quotes[language];
+  const [active, setActive] = useState(Math.floor(lines.length / 2));
   const t = gatewayCopy[language];
-  const total = quotes.length;
+  const total = lines.length;
   const half = Math.floor(total / 2);
   const cardW = isMobile ? 230 : 270;
   const cardH = isMobile ? 320 : 390;
@@ -278,7 +303,7 @@ function ArcCardCarousel({ isMobile, language }: { isMobile: boolean; language: 
 
   return (
     <div style={{ ...styles.carousel, height: containerH }}>
-      {quotes.map((quote, index) => {
+      {lines.map((quote, index) => {
         let pos = index - active;
         if (pos > half) pos -= total;
         if (pos < -half) pos += total;
@@ -596,7 +621,7 @@ export function Auragate({
                 opacity: portalLoaded ? 1 : 0,
               }}
             />
-            <PortalIntro isMobile={isMobile} sceneOpacity={scene1Opacity} />
+            <PortalIntro isMobile={isMobile} sceneOpacity={scene1Opacity} language={language} />
             <button
               ref={downHintRef}
               type="button"
