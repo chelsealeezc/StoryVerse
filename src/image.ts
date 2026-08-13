@@ -1,6 +1,6 @@
 import type { Analysis, Draft } from "./types";
 
-export type ImageStyle = "crayon" | "minimal-realistic" | "retro-collage";
+export type ImageStyle = "crayon" | "zine" | "minimal-realistic" | "retro-collage";
 
 export type StoryHighlight = {
   title: string;

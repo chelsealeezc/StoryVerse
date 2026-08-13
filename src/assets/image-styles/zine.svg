@@ -1,0 +1,47 @@
+<!--
+  「独立杂志风」示意图。
+  三个特征都要看得见：半调网点、双色套印（墨蓝 + 荧光橘）、大面积留白。
+  真正的成图由万相生成，这里只是让用户知道会得到什么调性。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+  <defs>
+    <!-- 半调网点：小志的核心质感，靠一层点阵而不是渐变来做明暗 -->
+    <pattern id="zine-dots" width="6" height="6" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="1.6" fill="#1c3f6e" />
+    </pattern>
+    <pattern id="zine-dots-fine" width="5" height="5" patternUnits="userSpaceOnUse">
+      <circle cx="2.5" cy="2.5" r="1" fill="#ff5c35" />
+    </pattern>
+    <filter id="zine-paper" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="4" />
+      <feColorMatrix type="saturate" values="0" />
+      <feComponentTransfer><feFuncA type="linear" slope="0.09" /></feComponentTransfer>
+    </filter>
+  </defs>
+
+  <!-- 纸张本身就是第三种「颜色」，留白占了画面一半以上 -->
+  <rect width="320" height="320" fill="#f4f1e8" />
+
+  <!-- 套印没对准的橘色色块，故意偏移几个像素 -->
+  <rect x="46" y="42" width="118" height="118" fill="#ff5c35" opacity="0.9" />
+  <rect x="52" y="48" width="118" height="118" fill="url(#zine-dots)" opacity="0.55" />
+
+  <!-- 侧脸剪影：双色印刷只能靠实心块面和网点分层 -->
+  <path d="M196 96 Q232 96 240 132 Q246 158 232 172 L234 190 L216 194 L216 222 L172 222 L172 150 Q172 100 196 96 Z"
+        fill="#1c3f6e" />
+  <path d="M216 130 a5 5 0 1 0 0.1 0" fill="#f4f1e8" />
+  <path d="M172 150 L172 222 L216 222 L216 194 Z" fill="url(#zine-dots-fine)" opacity="0.7" />
+
+  <!-- 排版：小志的字通常压在图上，字号对比极大 -->
+  <text x="46" y="196" font-family="Georgia, 'Times New Roman', serif" font-size="42" font-weight="700" fill="#1c3f6e" letter-spacing="-1.5">ISSUE</text>
+  <text x="46" y="220" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#ff5c35" letter-spacing="5">NO. 07 — SELF PUBLISHED</text>
+  <line x1="46" y1="234" x2="274" y2="234" stroke="#1c3f6e" stroke-width="2" />
+
+  <!-- 下方大片留白，只放一行小字 -->
+  <text x="46" y="256" font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#1c3f6e" opacity="0.7" letter-spacing="1.5">HALFTONE · TWO-COLOUR · RISO</text>
+
+  <!-- 出血边：小志裁切后常见的一圈毛边 -->
+  <rect x="8" y="8" width="304" height="304" fill="none" stroke="#1c3f6e" stroke-width="1.5" stroke-dasharray="2 5" opacity="0.35" />
+
+  <rect width="320" height="320" filter="url(#zine-paper)" opacity="0.6" />
+</svg>

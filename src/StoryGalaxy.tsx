@@ -28,6 +28,14 @@ type StoryNodeData = {
   similarity: number;
   label: string;
   desc: string;
+  /*
+   * 只有演示星点才有英文版本。真实故事是作者用哪种语言写的就显示哪种，
+   * 不该被界面语言改写 —— 所以这两个字段是可选的。
+   */
+  labelEn?: string;
+  descEn?: string;
+  tags?: string[];
+  tagsEn?: string[];
   mine: boolean;
   liked: boolean;
   angle: number;
@@ -120,24 +128,24 @@ const galaxyCopy = {
     reportDoneTitle: "Report received",
     reportDoneBody: "Thank you for helping protect the community. Your identity will not be shown to the author before review.",
     backToStory: "Back to story",
-    resonanceGroups: [["City", "Near", "Different"], ["Life stage", "Near", "Different"], ["Theme", "Near", "Different"]],
+    resonanceGroups: [["City", "Similar", "Different"], ["Life stage", "Similar", "Different"], ["Theme", "Similar", "Different"]],
     confirm: "Confirm",
   },
 } as const;
 
 const storyNodes: StoryNodeData[] = [
-  { id: "n1", words: 54, theme: "choice", similarity: 0.92, label: "改变人生的决定", desc: "她在二十三岁那年离开熟悉的城市，后来才明白那不是逃离，而是第一次选择自己。", mine: true, liked: true, angle: 0.2, lift: 0.2 },
-  { id: "n2", words: 31, theme: "city", similarity: 0.86, label: "异乡第一夜", desc: "凌晨三点的便利店灯光，让他想起很久以前没说出口的告别。", mine: false, liked: true, angle: 1.1, lift: -0.1 },
-  { id: "n3", words: 78, theme: "memory", similarity: 0.78, label: "多年后仍会讲起", desc: "有些事过去很久，仍然像星光一样，在每次讲述里重新抵达。", mine: true, liked: false, angle: 2.05, lift: 0.35 },
-  { id: "n4", words: 44, theme: "family", similarity: 0.71, label: "给母亲的信", desc: "他终于理解，那些争吵背后藏着两代人不同的害怕。", mine: false, liked: false, angle: 2.85, lift: -0.25 },
-  { id: "n5", words: 26, theme: "future", similarity: 0.67, label: "没有走的路", desc: "另一种人生并没有消失，它只是以想象的方式陪你走到今天。", mine: false, liked: true, angle: 3.6, lift: 0.1 },
-  { id: "n6", words: 62, theme: "choice", similarity: 0.58, label: "分岔口", desc: "决定发生在很安静的一天，后来所有热闹都从那里开始。", mine: false, liked: false, angle: 4.22, lift: -0.35 },
-  { id: "n7", words: 39, theme: "city", similarity: 0.49, label: "雨中的车站", desc: "她突然发现自己记住的不是目的地，而是站台上那些陌生人的脸。", mine: true, liked: false, angle: 4.9, lift: 0.28 },
-  { id: "n8", words: 22, theme: "memory", similarity: 0.42, label: "旧照片", desc: "照片里的人都还年轻，像一群不知道答案也仍然出发的人。", mine: false, liked: false, angle: 5.45, lift: -0.15 },
-  { id: "n9", words: 47, theme: "future", similarity: 0.36, label: "后来的人生", desc: "他把遗憾换成方向，用很长时间完成一个很小的转身。", mine: false, liked: true, angle: 5.95, lift: 0.4 },
-  { id: "n10", words: 88, theme: "family", similarity: 0.82, label: "相似的心境", desc: "远隔重洋的两个人，在同一个夜晚写下了几乎一样的句子。", mine: true, liked: true, angle: 0.72, lift: -0.38 },
-  { id: "n11", words: 18, theme: "city", similarity: 0.31, label: "路灯", desc: "那盏灯亮起时，他突然不再觉得自己只是路过。", mine: false, liked: false, angle: 1.74, lift: 0.0 },
-  { id: "n12", words: 35, theme: "choice", similarity: 0.55, label: "不一样的观点", desc: "世界很大，我们不怕不同的观点，只怕只能听见一种声音。", mine: false, liked: false, angle: 3.12, lift: 0.22 },
+  { id: "n1", words: 54, theme: "choice", similarity: 0.92, label: "改变人生的决定", desc: "她在二十三岁那年离开熟悉的城市，后来才明白那不是逃离，而是第一次选择自己。", labelEn: 'The decision that changed everything', descEn: 'At twenty-three she left the city she knew. Only later did she understand it was not an escape, but the first time she chose herself.', tags: ['异乡', '选择', '记忆'], tagsEn: ['Migration', 'Choice', 'Memory'], mine: true, liked: true, angle: 0.2, lift: 0.2 },
+  { id: "n2", words: 31, theme: "city", similarity: 0.86, label: "异乡第一夜", desc: "凌晨三点的便利店灯光，让他想起很久以前没说出口的告别。", labelEn: 'First night far from home', descEn: 'The convenience-store light at three in the morning reminded him of a goodbye he never said out loud.', tags: ['城市', '告别', '深夜'], tagsEn: ['City', 'Farewell', 'Night'], mine: false, liked: true, angle: 1.1, lift: -0.1 },
+  { id: "n3", words: 78, theme: "memory", similarity: 0.78, label: "多年后仍会讲起", desc: "有些事过去很久，仍然像星光一样，在每次讲述里重新抵达。", labelEn: 'Still told, years later', descEn: 'Some things happened long ago and still arrive like starlight — freshly, every time they are retold.', tags: ['记忆', '家庭', '讲述'], tagsEn: ['Memory', 'Family', 'Retelling'], mine: true, liked: false, angle: 2.05, lift: 0.35 },
+  { id: "n4", words: 44, theme: "family", similarity: 0.71, label: "给母亲的信", desc: "他终于理解，那些争吵背后藏着两代人不同的害怕。", labelEn: 'A letter to my mother', descEn: 'He finally understood that behind those arguments were two generations afraid of different things.', tags: ['家庭', '理解', '书信'], tagsEn: ['Family', 'Understanding', 'Letters'], mine: false, liked: false, angle: 2.85, lift: -0.25 },
+  { id: "n5", words: 26, theme: "future", similarity: 0.67, label: "没有走的路", desc: "另一种人生并没有消失，它只是以想象的方式陪你走到今天。", labelEn: 'The road not taken', descEn: 'The other life never disappeared. It simply walked beside you, in the form of imagination.', tags: ['未来', '选择', '想象'], tagsEn: ['Future', 'Choice', 'Imagination'], mine: false, liked: true, angle: 3.6, lift: 0.1 },
+  { id: "n6", words: 62, theme: "choice", similarity: 0.58, label: "分岔口", desc: "决定发生在很安静的一天，后来所有热闹都从那里开始。", labelEn: 'The fork in the road', descEn: 'The decision happened on a very quiet day. Everything loud came afterwards.', tags: ['选择', '转折', '安静'], tagsEn: ['Choice', 'Turning point', 'Quiet'], mine: false, liked: false, angle: 4.22, lift: -0.35 },
+  { id: "n7", words: 39, theme: "city", similarity: 0.49, label: "雨中的车站", desc: "她突然发现自己记住的不是目的地，而是站台上那些陌生人的脸。", labelEn: 'The station in the rain', descEn: 'She realised what she remembered was not the destination, but the faces of strangers on the platform.', tags: ['城市', '陌生人', '雨'], tagsEn: ['City', 'Strangers', 'Rain'], mine: true, liked: false, angle: 4.9, lift: 0.28 },
+  { id: "n8", words: 22, theme: "memory", similarity: 0.42, label: "旧照片", desc: "照片里的人都还年轻，像一群不知道答案也仍然出发的人。", labelEn: 'Old photographs', descEn: 'Everyone in the picture is still young — a group of people who set out without knowing the answer.', tags: ['记忆', '年轻', '照片'], tagsEn: ['Memory', 'Youth', 'Photos'], mine: false, liked: false, angle: 5.45, lift: -0.15 },
+  { id: "n9", words: 47, theme: "future", similarity: 0.36, label: "后来的人生", desc: "他把遗憾换成方向，用很长时间完成一个很小的转身。", labelEn: 'The life that came after', descEn: 'He traded regret for direction, and spent a long time completing a very small turn.', tags: ['未来', '遗憾', '方向'], tagsEn: ['Future', 'Regret', 'Direction'], mine: false, liked: true, angle: 5.95, lift: 0.4 },
+  { id: "n10", words: 88, theme: "family", similarity: 0.82, label: "相似的心境", desc: "远隔重洋的两个人，在同一个夜晚写下了几乎一样的句子。", labelEn: 'A mood that matched', descEn: 'Two people an ocean apart wrote almost the same sentence on the same night.', tags: ['共鸣', '距离', '家庭'], tagsEn: ['Resonance', 'Distance', 'Family'], mine: true, liked: true, angle: 0.72, lift: -0.38 },
+  { id: "n11", words: 18, theme: "city", similarity: 0.31, label: "路灯", desc: "那盏灯亮起时，他突然不再觉得自己只是路过。", labelEn: 'Streetlight', descEn: 'When that lamp came on, he suddenly stopped feeling like someone just passing through.', tags: ['城市', '归属', '深夜'], tagsEn: ['City', 'Belonging', 'Night'], mine: false, liked: false, angle: 1.74, lift: 0.0 },
+  { id: "n12", words: 35, theme: "choice", similarity: 0.55, label: "不一样的观点", desc: "世界很大，我们不怕不同的观点，只怕只能听见一种声音。", labelEn: 'A different view', descEn: 'The world is wide. We are not afraid of different opinions — only of hearing a single voice.', tags: ['选择', '不同', '声音'], tagsEn: ['Choice', 'Difference', 'Voice'], mine: false, liked: false, angle: 3.12, lift: 0.22 },
 ];
 
 const resonanceKeys = ["city", "stage", "theme"] as const;
@@ -320,8 +328,14 @@ function CameraController({
     const target = selected && galaxyRef.current
       ? galaxyRef.current.localToWorld(nodePosition(selected).clone())
       : new THREE.Vector3(0.25, -0.08, -1.65);
+    /*
+     * 选中星点时的机位。原来偏移量只有 (1.12, 0.7, 2.15)、距离约 2.5 个单位，
+     * 再加上 fov 从 53 收到 34，两个效果叠在一起就贴到星点脸上了 ——
+     * 周围一颗星都看不见，失去了「它在星图里的位置」这个信息。
+     * 这里把距离拉到约 4.9，fov 也只收到 46。
+     */
     const cameraTarget = selected
-      ? new THREE.Vector3(target.x - 1.12, target.y + 0.7, target.z + 2.15 - zoom * 0.65)
+      ? new THREE.Vector3(target.x - 2.15, target.y + 1.34, target.z + 4.1 - zoom * 0.65)
       : new THREE.Vector3(0, 0.62 - zoom * 0.22, 10.25 - zoom * 1.42);
     const targetProxy = { x: controlsRef.current?.target?.x ?? 0, y: controlsRef.current?.target?.y ?? 0, z: controlsRef.current?.target?.z ?? 0 };
     const tl = gsap.timeline({ defaults: { ease: "power3.inOut", overwrite: "auto" } });
@@ -349,7 +363,7 @@ function CameraController({
         }
       },
     }, 0).to(camera, {
-      fov: selected ? 34 : 53,
+      fov: selected ? 46 : 53,
       duration: selected ? 0.88 : 0.72,
       onUpdate: () => camera.updateProjectionMatrix(),
     }, 0);
@@ -476,15 +490,15 @@ function StoryPanel({ node, language, onClose, onReact, onReport }: { node: Stor
           <span>{node.theme.toUpperCase()}</span>
           <span>{t.escape}</span>
         </div>
-        <h2>{node.label}</h2>
+        <h2>{language === "en" && node.labelEn ? node.labelEn : node.label}</h2>
         <p className="story-panel-stats">
           <b style={{ background: themeColors[node.theme] }} />
           {t.stats(node.words, node.similarity)}
         </p>
-        <p>{node.desc}</p>
+        <p>{language === "en" && node.descEn ? node.descEn : node.desc}</p>
         <div className="story-panel-divider" />
         <div className="story-panel-tags">
-          {["异乡", "选择", "记忆", "城市", "共鸣"].map((tag) => <span key={tag}>{tag}</span>)}
+          {((language === "en" ? node.tagsEn : node.tags) ?? []).map((tag) => <span key={tag}>{tag}</span>)}
         </div>
         <div className="story-panel-actions">
           <button className={reaction === "like" ? "is-active like" : ""} onClick={() => { const next=reaction === "like" ? null : "like"; setReaction(next); onReact?.(node.id,next); }}>
@@ -762,6 +776,8 @@ export function StoryGalaxy({
       similarity: Math.max(0.28,0.92-index*0.055),
       label: story.title,
       desc: story.body,
+      tags: [story.theme, story.city, story.stage].filter(Boolean),
+      tagsEn: [story.theme, story.city, story.stage].filter(Boolean),
       mine: mineIds.includes(story.id),
       liked: reactions[story.id] === "like",
       angle: (index / Math.max(stories.length,1)) * Math.PI * 2,

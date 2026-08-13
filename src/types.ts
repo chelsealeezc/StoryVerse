@@ -104,7 +104,10 @@ export type ReviewBucket =
 export type ReviewStatus = "pending" | "kept" | "removed";
 
 /** 内容审核命中的类别，对应三段柔和提示 */
-export type ModerationFlag = "privacy" | "attack" | "distress";
+/** 与 src/moderation.ts 的 ModerationCategory 保持一致（审核准则七类 + 危机） */
+export type ModerationFlag =
+  | "privacy" | "attack" | "distress" | "crisis"
+  | "hate" | "minor" | "explicit" | "spam";
 
 export interface ReviewItem {
   id: string;
