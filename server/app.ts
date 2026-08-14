@@ -18,6 +18,7 @@ import {
 } from "./auth.js";
 import { createPool } from "./db.js";
 import { createImageGenerationService, imageGenerationError } from "./image-generation.js";
+import { createTranscriptionService, transcriptionError } from "./speech-to-text.js";
 
 const emailSchema = z.string().email().max(254).transform(normalizeEmail);
 const passwordSchema = z.string().min(10).max(128);
@@ -321,6 +322,32 @@ export async function buildApp(options: { pool?: pg.Pool | null } = {}): Promise
     } catch(error) {
       const mapped=imageGenerationError(error);
       return reply.code(mapped.status).send(fail(request,"IMAGE_GENERATION_FAILED",mapped.message));
+    }
+  });
+
+  /*
+   * 语音转文字（需求 2.4）。
+   * 和生图同构：Key 只在服务端，前端 POST 一段 base64 音频，拿回文本。
+   * 限流比生图松一些 —— 用户写一篇故事可能会分几段录。
+   */
+  const transcribe = createTranscriptionService({
+    appKey: process.env.VOLC_ASR_APP_KEY,
+    accessKey: process.env.VOLC_ASR_ACCESS_KEY,
+    resourceId: process.env.VOLC_ASR_RESOURCE_ID,
+    baseUrl: process.env.VOLC_ASR_BASE_URL,
+  });
+  app.post("/api/transcribe", { config:{rateLimit:{max:40,timeWindow:"1 hour"}}, preHandler: authenticated }, async (request,reply) => {
+    try {
+      const input=z.object({
+        audioBase64:z.string().min(1),
+        format:z.string().max(10).optional(),
+        language:z.string().max(16).optional(),
+      }).parse(request.body);
+      return ok(request,await transcribe(input));
+    } catch(error) {
+      if (error instanceof ZodError) throw error;
+      const mapped=transcriptionError(error);
+      return reply.code(mapped.status).send(fail(request,"TRANSCRIPTION_FAILED",mapped.message));
     }
   });
 

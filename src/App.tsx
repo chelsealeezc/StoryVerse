@@ -7,6 +7,7 @@ import {
 import { extractHints } from "./ai";
 import { api, type RecommendationItem, type User } from "./api";
 import crayonStylePreview from "./assets/image-styles/crayon.jpg";
+import zineStylePreview from "./assets/image-styles/zine.svg";
 import minimalRealisticStylePreview from "./assets/image-styles/minimal-realistic.jpg";
 import retroCollageStylePreview from "./assets/image-styles/retro-collage.jpg";
 import { guides, icebreakers, stories } from "./data";
@@ -19,6 +20,7 @@ import { StoryGalaxy } from "./StoryGalaxy";
 import { BrandLogo } from "./BrandLogo";
 import { Tour } from "./Tour";
 import { AdminConsole } from "./AdminConsole";
+import { startRecording, SpeechError, type RecordingHandle } from "./speech";
 import { moderateStory, moderationCopy } from "./moderation";
 import type { ModerationResult } from "./moderation";
 import type { PlaceSuggestion } from "./places";
@@ -46,23 +48,72 @@ const themeColors: Record<string, string> = {
 const imageStyleOptions: Array<{
   id: ImageStyle;
   label: string;
+  labelEn: string;
   description: string;
+  descriptionEn: string;
   preview: string;
 }> = [
-  { id: "crayon", label: "卡通蜡笔风", description: "笨拙涂鸦、蜡笔线条与俏皮手绘感", preview: crayonStylePreview },
-  { id: "minimal-realistic", label: "简约写实风", description: "扁平丝网印刷、颗粒肌理与高饱和留白", preview: minimalRealisticStylePreview },
-  { id: "retro-collage", label: "复古拼贴风", description: "撕纸层次、粉彩纸纹与温暖编辑感", preview: retroCollageStylePreview },
+  // 示意图只是让用户预期成图调性，真正的图仍由万相按 server/image-generation.ts 里的 prompt 生成。
+  { id: "crayon", label: "卡通蜡笔风", labelEn: "Cartoon clay", description: "阿德曼式定格黏土，手工捏塑感与荒诞喜剧气质", descriptionEn: "Aardman-style stop-motion clay: fingerprints, matte surfaces, gentle absurdity", preview: crayonStylePreview },
+  { id: "zine", label: "独立杂志风", labelEn: "Indie zine", description: "半调网点、双色印刷与大量留白的小志排版感", descriptionEn: "Halftone dots, two-colour riso printing and a lot of white space", preview: zineStylePreview },
+  { id: "minimal-realistic", label: "日本画风", labelEn: "Japanese poster", description: "极简几何剪影、少量实色油墨与大面积留白", descriptionEn: "Minimal geometric silhouettes, a handful of flat inks, generous negative space", preview: minimalRealisticStylePreview },
+  { id: "retro-collage", label: "复古拼贴风", labelEn: "Retro collage", description: "撕纸层次、粉彩纸纹与温暖编辑感", descriptionEn: "Torn-paper layers, pastel stock, a warm editorial feel", preview: retroCollageStylePreview },
+];
+
+/*
+ * 情绪标签。id 沿用 Laros & Steenkamp 量表的英文命名（研究侧要可对照），
+ * 但 en 是给用户看的界面文案，用形容词、口语化 —— 量表词当按钮太硬。
+ *
+ * 注意 shame 这一项：中文选的是「愧疚」，对应的是 guilt（针对具体行为），
+ * 而不是 shame（针对自我）。心理学上是两种情绪，原来的 "Shame" 是误译。
+ */
+/*
+ * 时间与人生阶段选项。value 固定存中文 —— 它会进数据库，也是研究口径；
+ * label 才跟界面语言走。这样切语言不会把已选值弄丢。
+ */
+/* 主题标签的显示名。value 仍然是中文 —— 它会进数据库，这里只负责显示。 */
+const themeLabelsEn: Record<string, string> = {
+  家庭: "Family", 成长: "Growing up", 迁移: "Migration",
+  关系: "Relationships", 工作: "Work", 身份: "Identity",
+  其他: "Other",
+};
+const themeLabel = (value: string, language: Language) =>
+  language === "zh" ? value : themeLabelsEn[value] ?? value;
+
+const peopleOptions = [
+  { value: "自己", en: "Myself" },
+  { value: "家人", en: "Family" },
+  { value: "恋人", en: "Partner" },
+  { value: "朋友", en: "Friends" },
+  { value: "陌生人", en: "A stranger" },
+  { value: "老师", en: "A teacher" },
+  { value: "同事", en: "A colleague" },
+];
+const timeOptions = [
+  { value: "今天", en: "Today" },
+  { value: "最近一年", en: "Within the past year" },
+  { value: "小时候", en: "In childhood" },
+  { value: "很久以前", en: "A long time ago" },
+  { value: "不确定", en: "Not sure" },
+];
+const stageOptions = [
+  { value: "童年", en: "Childhood" },
+  { value: "中学", en: "Secondary school" },
+  { value: "大学", en: "University" },
+  { value: "青年探索", en: "Finding my way" },
+  { value: "初入职场", en: "First job" },
+  { value: "成年回望", en: "Looking back as an adult" },
 ];
 
 const moodOptions = [
-  { id: "anger", zh: "愤怒", en: "Anger", icon: "↯" },
-  { id: "fear", zh: "担心", en: "Fear", icon: "!" },
-  { id: "sadness", zh: "失落", en: "Sadness", icon: "☂" },
-  { id: "shame", zh: "愧疚", en: "Shame", icon: "◌" },
-  { id: "contentment", zh: "平和自足", en: "Contentment", icon: "○" },
-  { id: "happiness", zh: "开心幸福", en: "Happiness", icon: "☀" },
+  { id: "anger", zh: "愤怒", en: "Angry", icon: "↯" },
+  { id: "fear", zh: "担心", en: "Worried", icon: "!" },
+  { id: "sadness", zh: "失落", en: "Let down", icon: "☂" },
+  { id: "shame", zh: "愧疚", en: "Guilty", icon: "◌" },
+  { id: "contentment", zh: "平和自足", en: "At peace", icon: "○" },
+  { id: "happiness", zh: "开心幸福", en: "Happy", icon: "☀" },
   { id: "love", zh: "爱", en: "Love", icon: "♥" },
-  { id: "pride", zh: "自信骄傲", en: "Pride", icon: "✦" },
+  { id: "pride", zh: "自信骄傲", en: "Proud", icon: "✦" },
 ];
 
 const EVENT_TYPE_TAGS: StoryEventTypeTag[] = [
@@ -89,8 +140,18 @@ const EVENT_TYPE_TAGS: StoryEventTypeTag[] = [
   { parentType: "Other or unclassifiable events", parentLabelZh: "其他或不可分类事件", subtype: "Not further subtyped in the article", value: "other_or_unclassifiable", labelEn: "Other or unclassifiable", labelZh: "其他" },
 ];
 
+/*
+ * draft.mood 存的是当时界面上显示的文案，所以改过英文之后，
+ * 老数据里可能还是旧的量表词。这里保留一份历史别名，避免匹配不上。
+ */
+const legacyMoodEn: Record<string, string> = {
+  Anger: "anger", Fear: "fear", Sadness: "sadness", Shame: "shame",
+  Contentment: "contentment", Happiness: "happiness", Pride: "pride",
+};
+
 function emotionTagFromMood(mood: string): StoryEmotionTag | null {
-  const match = moodOptions.find(option => [option.id, option.zh, option.en].includes(mood));
+  const legacyId = legacyMoodEn[mood];
+  const match = moodOptions.find(option => [option.id, option.zh, option.en].includes(mood) || option.id === legacyId);
   if (!match) return null;
   return { value: match.id, labelZh: match.zh, labelEn: match.en };
 }
@@ -102,11 +163,18 @@ function requestThemeReview(themeText: string): StoryThemeTag {
 const PORTAL_BG = "https://res.cloudinary.com/dy5er7kv5/image/upload/q_auto/f_auto/v1781046673/image_1_ksxfzb.png";
 const WORLD_BG = "https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260609_231253_53c0854c-d13c-42c1-9fc0-17e87cd34091.png&w=1280&q=85";
 
-const blankPrompts = [
-  "今天想分享哪段对你影响深远的经历？",
-  "有没有一件事，让现在的你和以前不一样？",
-  "没有思路？看一下旁边的例子吧～=(^.^)=",
-];
+const blankPrompts = {
+  zh: [
+    "今天想分享哪段对你影响深远的经历？",
+    "有没有一件事，让现在的你和以前不一样？",
+    "没有思路？看一下旁边的例子吧～=(^.^)=",
+  ],
+  en: [
+    "What experience shaped you more than you expected?",
+    "Was there a moment that made you different from who you were?",
+    "Stuck? Take a look at the examples beside you ～=(^.^)=",
+  ],
+};
 
 const routeMap = {
   intro: "/",
@@ -166,11 +234,25 @@ const copy = {
     guideStep: "第一步 · 故事的开始", guideTitle: "你最想讲的那个故事是什么？", guideSub: "选择一个你喜欢的开头吧",
     customGuide: "写下你的故事入口", customGuidePlaceholder: "比如：一次迟来的道歉 / 我第一次真正离开家", continueWithPrompt: "带着这个提示继续",
     changeGuide: "换一个引导", focus: "专注模式", saved: "草稿已保存", storyStep: "第二步 · Story Collection",
-    storyH1: "顺着想法，慢慢写。", title: "标题", optional: "选填", titleHint: "不用着急取标题，先顺着想法写一些吧",
+    storyH1: "顺着想法，", storyH1b: "慢慢写。", title: "标题", optional: "选填", optionalFill: "选填", titleHint: "不用着急取标题，先顺着想法写一些吧",
     yourStory: "你的故事", count: "建议 100–1500 字", gentleTip: "这段记忆已经有了开头。再多写一点细节，AI 会更容易理解它。",
     restTip: "需要休息一下吗？你的草稿已自动保存。", mood: "写完后的感受", occurred: "故事发生在", city: "城市",
     lifeStage: "当时的人生阶段", people: "故事里有谁？", multi: "可多选", prev: "上一步", ai: "故事写好了",
     gender: "性别", genderPick: "请选择", genderMale: "男", genderFemale: "女", genderOther: "其他",
+    choose: "请选择", ageLabel: "年龄", ageUnit: "岁", cityHint: "（海内外都可以填）",
+    autosave: "内容会自动保存在这台设备上",
+    cityPlaceholder: "输入城市名，例如 北京 / Tokyo", citySearching: "正在检索…",
+    aiRead: "AI 从你的文字里读到：", aiHintNote: "只是建议，可以忽略或改掉",
+    imgSearching: "正在寻找故事的高光时刻…", imgFailed: "这次没有完成故事图片",
+    imgIdle: "把故事高光变成一张插画",
+    imgIdleNote: "AI 会从正文中选择一个真实、可画的关键瞬间，并按你选择的风格生成",
+    imgStoryboard: "查看 AI 选中的高光时刻",
+    imgPrivacy: "生图是可选项，不会阻止你发布故事。生成时会将故事正文发送给阿里云百炼；每次只生成一张图片并按一张计费。图片只保留在当前页面，刷新后消失。",
+    publishNote: "确认后将进入模拟安全检查，并匿名加入故事池。",
+    yourStar: "你的星点", unknownCity: "未知城市",
+    coordsResolved: "已解析坐标", coordsUse: "用于星图定位", coordsMissing: "这个地名暂时没查到坐标，仍然可以继续",
+    styleLegend: "生成的图片风格", styleHint: "悬浮或聚焦可以查看风格示意图", stylePeek: "示意图",
+    confirmTime: "时间", confirmPlace: "地点", confirmStage: "人生阶段",
     genderOtherHint: "选择「其他」时，AI生图可能无法准确呈现人物形象哦。", genderOtherNote: "只是建议，可以忽略",
     pasteTitle: "这是你以前写的内容吗？可以选择其他输入方式哦。", pasteYes: "是", pasteOther: "尝试别的输入方式",
     leaveTitle: "你的故事尚未完成，是否保存草稿？", saveDraft: "保存草稿", leaveAnyway: "直接离开", keepWriting: "继续写",
@@ -191,11 +273,25 @@ const copy = {
     guideStep: "Step 1 · Find an entry point", guideTitle: "Which moment is calling you?", guideSub: "This is not a test. It simply gives memory a place to begin.",
     customGuide: "Write your own entry point", customGuidePlaceholder: "Example: a late apology / the first time I truly left home", continueWithPrompt: "Continue with this prompt",
     changeGuide: "Change prompt", focus: "Focus mode", saved: "Draft saved", storyStep: "Step 2 · Story Collection",
-    storyH1: "Follow the thought, slowly.", title: "Title", optional: "Optional", titleHint: "No need to title it yet. Start with the thought.",
+    storyH1: "Start anywhere. ", storyH1b: "Take your time.", title: "Title", optional: "please select", optionalFill: "please fill in", titleHint: "No need to title it yet. Start with the thought.",
     yourStory: "Your story", count: "Suggested 100-1500 words", gentleTip: "This memory has a beginning. Add a few details so AI can understand it better.",
     restTip: "Need a pause? Your draft has been saved.", mood: "How you feel after writing", occurred: "When it happened", city: "City",
     lifeStage: "Life stage then", people: "Who is in the story?", multi: "Multiple", prev: "Previous", ai: "Let AI organize",
     gender: "Gender", genderPick: "Please choose", genderMale: "Male", genderFemale: "Female", genderOther: "Other",
+    choose: "Please choose", ageLabel: "Age", ageUnit: "", cityHint: "(anywhere in the world)",
+    autosave: "Saved automatically on this device",
+    cityPlaceholder: "Type a city, e.g. Beijing / Tokyo", citySearching: "Searching…",
+    aiRead: "From your writing, we picked up:", aiHintNote: "Just suggestions — ignore or edit them freely",
+    imgSearching: "Looking for the moment worth drawing…", imgFailed: "The illustration didn't come through this time",
+    imgIdle: "Turn one moment into an illustration",
+    imgIdleNote: "AI picks one real, drawable moment from your story and renders it in the style you chose",
+    imgStoryboard: "See the moment AI chose",
+    imgPrivacy: "Illustrations are optional and never block publishing. Your story text is sent to Alibaba Cloud Bailian; one image is generated and billed per attempt. The image lives on this page only and disappears on refresh.",
+    publishNote: "Next comes a safety check, then your story joins the pool anonymously.",
+    yourStar: "Your star", unknownCity: "Unknown city",
+    coordsResolved: "Coordinates", coordsUse: "used to place your star", coordsMissing: "We couldn't find coordinates for this place — you can still continue",
+    styleLegend: "Image style", styleHint: "Hover or focus to preview each style", stylePeek: "Preview",
+    confirmTime: "When", confirmPlace: "City", confirmStage: "Life stage",
     genderOtherHint: "With “Other”, the AI may not portray the character accurately in the generated image.", genderOtherNote: "Just a suggestion — feel free to ignore",
     pasteTitle: "Is this something you wrote before? You can choose another input method.", pasteYes: "Yes", pasteOther: "Try another input method",
     leaveTitle: "Your story is not finished. Save it as a draft?", saveDraft: "Save draft", leaveAnyway: "Leave anyway", keepWriting: "Keep writing",
@@ -691,7 +787,7 @@ function GuideStack({ draft, setDraft, language }: { draft: Draft; setDraft: (pa
                   <span className="guide-icon">{guide.icon}</span>
                   <div className="guide-title-lockup">
                     <h2>{title}</h2>
-                    <em>{language === "zh" ? guide.en : guide.title}</em>
+                    {language === "zh" && <em>{guide.en}</em>}
                   </div>
                   <small>0{i + 1} / 0{guides.length}</small>
                 </div>
@@ -726,7 +822,8 @@ function GuideStack({ draft, setDraft, language }: { draft: Draft; setDraft: (pa
   );
 }
 
-function CityField({ draft, setDraft, label }: { draft: Draft; setDraft: (patch: Partial<Draft>) => void; label: string }) {
+function CityField({ draft, setDraft, label, language }: { draft: Draft; setDraft: (patch: Partial<Draft>) => void; label: string; language: Language }) {
+  const t = copy[language];
   const [query, setQuery] = useState(draft.city);
   const [options, setOptions] = useState<PlaceSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -774,11 +871,11 @@ function CityField({ draft, setDraft, label }: { draft: Draft; setDraft: (patch:
   };
 
   return (
-    <label><span className="field-name">{label} <small>（海内外都可以填）</small></span>
+    <label><span className="field-name">{label} <small>{t.cityHint}</small></span>
       <div className="city-field">
         <input
           value={query}
-          placeholder="输入城市名，例如 北京 / Tokyo"
+          placeholder={t.cityPlaceholder}
           role="combobox"
           aria-expanded={open}
           autoComplete="off"
@@ -799,14 +896,14 @@ function CityField({ draft, setDraft, label }: { draft: Draft; setDraft: (patch:
                 onClick={() => pick(place)}
               ><b>{place.name}</b><span>{place.detail}</span></button>
             ))}
-            {loading && <p className="city-loading">正在检索…</p>}
+            {loading && <p className="city-loading">{t.citySearching}</p>}
           </div>
         )}
       </div>
       <span className="city-coords">
         {!draft.city ? "" : draft.cityLat !== null
-          ? <>已解析坐标 {formatCoords(draft.cityLat, draft.cityLon)} · 用于星图定位</>
-          : <>这个地名暂时没查到坐标，仍然可以继续</>}
+          ? <>{t.coordsResolved} {formatCoords(draft.cityLat, draft.cityLon)} · {t.coordsUse}</>
+          : <>{t.coordsMissing}</>}
       </span>
     </label>
   );
@@ -913,6 +1010,10 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   const [tagDrafts, setTagDrafts] = useState<Record<string, string[]>>({});
   const [storyTags, setStoryTags] = useState<StoryTagSet | null>(null);
   const [tagEditing, setTagEditing] = useState<"emotions" | "eventType" | "themes" | null>(null);
+  /* 语音输入：recording 表示正在录，transcribing 表示录完了在等识别结果 */
+  const [voiceState, setVoiceState] = useState<"idle" | "recording" | "transcribing">("idle");
+  const [voiceError, setVoiceError] = useState("");
+  const recordingRef = useRef<RecordingHandle | null>(null);
   const [customTheme, setCustomTheme] = useState("");
   const [themeTagError, setThemeTagError] = useState("");
   const [removedThemeTags, setRemovedThemeTags] = useState<StoryThemeTag[]>([]);
@@ -942,7 +1043,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
       setImageStatus("ready");
     } catch (error) {
       setImageStatus("failed");
-      setImageError(error instanceof Error ? error.message : "图片生成失败，请稍后重试。");
+      setImageError(error instanceof Error ? error.message : (language === "zh" ? "图片生成失败，请稍后重试。" : "Image generation failed. Please try again."));
     }
   };
   const chooseImageStyle = (nextStyle: ImageStyle) => {
@@ -973,7 +1074,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   }, [contentKey]);
   useEffect(() => {
     if (step !== 1) return;
-    const timer = window.setInterval(() => setIdlePromptIndex(index => (index + 1) % blankPrompts.length), 5000);
+    const timer = window.setInterval(() => setIdlePromptIndex(index => (index + 1) % blankPrompts[language].length), 5000);
     return () => clearInterval(timer);
   }, [step]);
   useEffect(() => {
@@ -1053,12 +1154,18 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
     if (leaveTarget !== null) update({ wizardStep: leaveTarget });
     setLeaveTarget(null);
   };
+  // 外面那句「还差一点：…」已经是双语的，这几项当时漏了，切英文也还是中文
+  /*
+   * 缺项直接引用表单上那一栏的标题（t.yourStory / t.mood / …），
+   * 用户扫一眼就知道该往哪儿看；自己另写一套说法反而对不上。
+   */
   const missingCollection = [
-    draft.body.trim().length < 100 ? "故事至少 100 字" : "",
-    !draft.mood ? "选择写完后的感受" : "",
-    !draft.time ? "选择故事发生时间" : "",
-    !draft.city ? "选择城市" : "",
-    draft.people.length === 0 ? "选择故事里有谁" : "",
+    draft.body.trim().length < 100
+      ? (language === "zh" ? `「${t.yourStory}」（至少 100 字）` : `"${t.yourStory}" (at least 100 words)`) : "",
+    !draft.mood ? `${language === "zh" ? "「" : '"'}${t.mood}${language === "zh" ? "」" : '"'}` : "",
+    !draft.time ? `${language === "zh" ? "「" : '"'}${t.occurred}${language === "zh" ? "」" : '"'}` : "",
+    !draft.city ? `${language === "zh" ? "「" : '"'}${t.city}${language === "zh" ? "」" : '"'}` : "",
+    draft.people.length === 0 ? `${language === "zh" ? "「" : '"'}${t.people}${language === "zh" ? "」" : '"'}` : "",
   ].filter(Boolean);
   const canContinueCollection = missingCollection.length === 0;
   const canContinueGuide = !!draft.guide && (draft.guide !== "other" || draft.customGuide.trim().length >= 2);
@@ -1079,13 +1186,16 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
       tags: { ...state.analysis!.tags, ...tagDrafts, ...legacyTags },
       storyTags: nextStoryTags,
     })
-      .catch(error => { setPublishError(error instanceof Error ? error.message : "发布失败，请稍后重试。"); })
+      .catch(error => { setPublishError(error instanceof Error ? error.message : (language === "zh" ? "发布失败，请稍后重试。" : "Publishing failed. Please try again.")); })
       .finally(() => setPublishing(false));
   };
 
   const attemptPublish = () => {
-    const result = moderateStory(draft.body);
-    if (result.flags.length === 0) { void runPublish(); return; }
+    // 标题也要过审核 —— 只看正文的话，标题写「die」这种会直接漏过去
+    const titleForCheck = draft.title || state.analysis?.suggestedTitle || "";
+    const result = moderateStory(`${titleForCheck}
+${draft.body}`, titleForCheck, draft.body);
+    if (result.hits.length === 0) { void runPublish(); return; }
     setModeration(result);
   };
 
@@ -1104,7 +1214,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
       createdAt: Date.now(),
       bucket,
       status: "pending",
-      flags: moderation?.flags,
+      flags: moderation?.hits.map(hit => hit.category),
       appealNote: bucket === "appealed" ? appealNote.trim() || undefined : undefined,
       mine: true,
     };
@@ -1128,10 +1238,29 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   };
   const showCityHint = !!hints.city && hints.city.name !== draft.city;
   const showAgeHint = hints.age !== null && String(hints.age) !== draft.age;
+  /*
+   * 预设标签。主题与意义原本只有中文，切到 ENG 会直接露出中文，
+   * 这里补上英文；英文按界面语气写，不是逐字直译（例如「告别」→ Letting go）。
+   */
+  const presetTopics = [
+    { zh: "成长", en: "Growing up" },
+    { zh: "关系", en: "Relationships" },
+    { zh: "迁移", en: "Moving away" },
+    { zh: "家庭", en: "Family" },
+    { zh: "身份", en: "Identity" },
+  ];
+  const presetMeanings = [
+    { zh: "自我理解", en: "Understanding myself" },
+    { zh: "边界", en: "Boundaries" },
+    { zh: "选择", en: "Choices" },
+    { zh: "告别", en: "Letting go" },
+    { zh: "重新开始", en: "Starting over" },
+  ];
+  const pick = (item: { zh: string; en: string }) => language === "zh" ? item.zh : item.en;
   const presetTags: Record<string, string[]> = {
-    topic: ["成长", "关系", "迁移", "家庭", "身份"],
+    topic: presetTopics.map(pick),
     emotion: moodOptions.map(option => language === "zh" ? option.zh : option.en),
-    meaning: ["自我理解", "边界", "选择", "告别", "重新开始"],
+    meaning: presetMeanings.map(pick),
   };
   const removeTag = (layer: string, tag: string) => setTagDrafts(previous => ({ ...previous, [layer]: (previous[layer] ?? []).filter(item => item !== tag) }));
   const addTag = (layer: string, custom = false) => setTagDrafts(previous => {
@@ -1140,22 +1269,85 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
     const nextTag = custom ? "其他" : (presetTags[layer] ?? []).find(tag => !current.includes(tag)) ?? "其他";
     return { ...previous, [layer]: current.includes(nextTag) ? current : [...current, nextTag].slice(0, 3) };
   });
+  /*
+   * 识别出来的文字接在正文末尾，不覆盖已经写好的内容 ——
+   * 用户通常是写了一段再补一段口述。
+   */
+  const toggleVoiceInput = async () => {
+    setVoiceError("");
+    if (voiceState === "recording") {
+      const handle = recordingRef.current;
+      recordingRef.current = null;
+      setVoiceState("transcribing");
+      try {
+        const text = handle ? await handle.stop() : "";
+        if (text) {
+          setDraft({
+            body: draft.body ? `${draft.body.replace(/\s+$/, "")}
+${text}` : text,
+            edits: draft.edits + 1,
+          });
+        }
+      } catch (error) {
+        setVoiceError(error instanceof SpeechError ? error.message
+          : language === "zh" ? "语音转文字失败了，可以重试，也可以直接打字。" : "Speech-to-text failed. Try again, or just type.");
+      } finally {
+        setVoiceState("idle");
+      }
+      return;
+    }
+    try {
+      recordingRef.current = await startRecording(language);
+      setVoiceState("recording");
+    } catch (error) {
+      setVoiceError(error instanceof SpeechError ? error.message
+        : language === "zh" ? "无法开始录音。" : "Could not start recording.");
+      setVoiceState("idle");
+    }
+  };
+  // 离开这一步时把麦克风放掉，否则标签页的录音指示灯会一直亮
+  useEffect(() => () => recordingRef.current?.cancel(), []);
+
   const activeStoryTags = storyTags ?? createStoryTagSet(draft, state.analysis);
+
+  /*
+   * 进第四步时把 AI 建议的标题真正写进 draft。
+   * 之前输入框的 value 是 `draft.title || suggestedTitle`，draft.title 是空的时候
+   * 显示的其实是建议标题 —— 一旦用户把它删空，value 立刻弹回建议标题，
+   * 看上去就是「这个标题改不了」。
+   */
+  useEffect(() => {
+    if (step === 3 && state.analysis && !draft.title.trim()) {
+      setDraft({ title: state.analysis.suggestedTitle });
+    }
+  }, [step, state.analysis]);
+
+  /*
+   * 到上限就把对应的选项面板收起来。
+   * 打开它的按钮在满了之后是 disabled 的，面板却还开着 —— 里面每个按钮都点不动，
+   * 看上去就是一块没有用的灰色区域。
+   */
+  useEffect(() => {
+    if (tagEditing === "emotions" && activeStoryTags.emotions.length >= 2) setTagEditing(null);
+    if (tagEditing === "themes" && activeStoryTags.themes.length >= 2) setTagEditing(null);
+  }, [tagEditing, activeStoryTags.emotions.length, activeStoryTags.themes.length]);
   const updateStoryTags = (next: StoryTagSet | ((previous: StoryTagSet) => StoryTagSet)) => {
     setStoryTags(previous => {
       const base = previous ?? activeStoryTags;
       return typeof next === "function" ? next(base) : next;
     });
   };
-  const chooseEmotionTag = (option: (typeof moodOptions)[number]) => updateStoryTags(previous => {
-    if (previous.emotions.some(tag => tag.value === option.id)) {
-      const emotions = previous.emotions.filter(tag => tag.value !== option.id);
-      return { ...previous, emotions: emotions.length ? emotions : previous.emotions };
-    }
-    const nextTag = { value: option.id, labelZh: option.zh, labelEn: option.en };
-    const emotions = previous.emotions.length >= 2 ? [previous.emotions[0], nextTag] : [...previous.emotions, nextTag];
-    return { ...previous, emotions };
-  });
+  const chooseEmotionTag = (option: (typeof moodOptions)[number]) => {
+    updateStoryTags(previous => {
+      if (previous.emotions.some(tag => tag.value === option.id)) {
+        const emotions = previous.emotions.filter(tag => tag.value !== option.id);
+        return { ...previous, emotions: emotions.length ? emotions : previous.emotions };
+      }
+      const nextTag = { value: option.id, labelZh: option.zh, labelEn: option.en };
+      const emotions = previous.emotions.length >= 2 ? [previous.emotions[0], nextTag] : [...previous.emotions, nextTag];
+      return { ...previous, emotions };
+    });
+  };
   const removeEmotionTag = (value: string) => updateStoryTags(previous => {
     const emotions = previous.emotions.filter(tag => tag.value !== value);
     return { ...previous, emotions: emotions.length ? emotions : previous.emotions };
@@ -1176,23 +1368,29 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
   };
   const addCustomThemeTag = () => {
     const value = customTheme.trim();
-    const chineseLength = Array.from(value).length;
     if (!value) return;
-    if (chineseLength > 2) {
-      setThemeTagError("主题最多 2 个字");
+    /*
+     * 长度上限要看写的是哪种文字。原来一律按「最多 2 个字」算，
+     * 那是中文的规矩 —— 英文模式下任何超过两个字母的词都会被拒，等于根本加不了主题。
+     */
+    const hasCJK = /[一-鿿]/.test(value);
+    const tooLong = hasCJK ? Array.from(value).length > 2 : value.length > 16;
+    if (tooLong) {
+      setThemeTagError(language === "zh" ? "主题最多 2 个字" : "Keep it under 16 characters");
       return;
     }
     if (activeStoryTags.themes.some(tag => tag.value === value)) {
-      setThemeTagError("这个主题已经存在");
+      setThemeTagError(language === "zh" ? "这个主题已经存在" : "That theme is already added");
       return;
     }
     if (activeStoryTags.themes.length >= 2) {
-      setThemeTagError("主题最多 2 个");
+      setThemeTagError(language === "zh" ? "主题最多 2 个" : "Up to 2 themes");
       return;
     }
     updateStoryTags(previous => ({ ...previous, themes: [...previous.themes, requestThemeReview(value)] }));
     setCustomTheme("");
     setThemeTagError("");
+    setTagEditing(null);
   };
 
   return (
@@ -1226,30 +1424,41 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
             </button>
             <Pill tone="lime">{guide ? (language === "zh" ? guide.title : guide.en) : ""}</Pill>
             <div className="panel-detail">
-              <small>{guide ? (language === "zh" ? guide.title : guide.en) : ""}</small>
+              {/* 标题已经由上面的 Pill 显示了，这里不再重复一次 */}
               <h2>{guidePrompt}</h2>
               <p><b>{language === "zh" ? "可以从这个例子开始" : "Start from an example"}</b>{guide?.examples}</p>
             </div>
             <div className="save-state" data-status={saveStatus}>
                 {saveStatus === "editing" ? <><i className="save-dot" /> {language === "zh" ? "正在写…" : "Writing…"}</>
                 : saveStatus === "saved" ? <><Check size={15} /> {t.saved} · {savedTime}</>
-                : <><Check size={15} /> 内容会自动保存在这台设备上</>}
+                : <><Check size={15} /> {t.autosave}</>}
             </div>
           </aside>
           <div className="story-form">
             <div className="story-form-title">
-              <div><p className="eyebrow">{t.storyStep}</p><h1>{language === "zh" ? <>顺着想法，<span className="serif">慢慢写。</span></> : t.storyH1}</h1></div>
+              <div><p className="eyebrow">{t.storyStep}</p><h1>{t.storyH1}<span className="serif">{t.storyH1b}</span></h1></div>
               <div className="story-input-tools">
-                <button className="tool-line-button" title={language === "zh" ? "语音转文字将在后续版本开放" : "Speech-to-text will be available in a later version"}><Mic size={18} /><span>{language === "zh" ? "语音输入" : "Voice input"}</span></button>
+                <button
+                  className={`tool-line-button voice-button ${voiceState !== "idle" ? "is-active" : ""}`}
+                  onClick={() => void toggleVoiceInput()}
+                  disabled={voiceState === "transcribing"}
+                  aria-pressed={voiceState === "recording"}
+                >
+                  <Mic size={18} />
+                  <span>{voiceState === "recording" ? (language === "zh" ? "结束录音" : "Stop recording")
+                    : voiceState === "transcribing" ? (language === "zh" ? "正在转文字…" : "Transcribing…")
+                    : (language === "zh" ? "语音输入" : "Voice input")}</span>
+                </button>
                 <button className="tool-line-button focus-line" onClick={() => setFocusMode(value => !value)}><span className={`switch ${focusMode ? "on" : ""}`}><i /></span><span>{language === "zh" ? "开启专注模式" : "Turn on focus mode"}</span></button>
+                {voiceError && <p className="voice-error" role="alert">{voiceError}</p>}
               </div>
             </div>
-            <label><span className="field-name">{t.title} <small>{t.optional}</small></span><input value={draft.title} onChange={e => setDraft({ title: e.target.value, edits: draft.edits + 1 })} placeholder={t.titleHint} /></label>
+            <label><span className="field-name">{t.title} <small>{t.optionalFill}</small></span><input value={draft.title} onChange={e => setDraft({ title: e.target.value, edits: draft.edits + 1 })} placeholder={t.titleHint} /></label>
             <label>{t.yourStory}<textarea value={draft.body} onPaste={e => {
               const pasted = e.clipboardData.getData("text");
               if (pasted.trim().length >= Math.max(120, draft.body.trim().length * 0.8)) setPasteDialog(true);
               setDraft({ pastedChars: draft.pastedChars + pasted.length });
-            }} onChange={e => setDraft({ body: e.target.value, edits: draft.edits + 1 })} placeholder={draft.body ? "" : blankPrompts[idlePromptIndex]} /><span className={`count ${draft.body.length > 1500 ? "warn" : ""}`}>{draft.body.length} / {t.count}</span></label>
+            }} onChange={e => setDraft({ body: e.target.value, edits: draft.edits + 1 })} placeholder={draft.body ? "" : blankPrompts[language][idlePromptIndex]} /><span className={`count ${draft.body.length > 1500 ? "warn" : ""}`}>{draft.body.length} / {t.count}</span></label>
             {resting && <div className="gentle-tip">{t.restTip}</div>}
             {draft.body.length > 0 && draft.body.length < 100 && !resting && <div className="gentle-tip">{t.gentleTip}</div>}
             {focusMode && <p className="focus-note">{language === "zh" ? "按 Esc 或再点一次开关，随时退出专注模式。" : "Press Esc or toggle the switch again to leave focus mode anytime."}</p>}
@@ -1265,35 +1474,35 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
                 </div>
               </div>
               <div className="field-grid">
-                <label><span className="field-name">{t.occurred}</span><select value={draft.time} onChange={e => setDraft({ time: e.target.value })}><option value="">请选择</option>{["今天", "最近一年", "小时候", "很久以前", "不确定"].map(x => <option key={x}>{x}</option>)}</select></label>
-                <CityField draft={draft} setDraft={setDraft} label={t.city} />
-                <label><span className="field-name">年龄 <small>{t.optional}</small></span>
+                <label><span className="field-name">{t.occurred}</span><select value={draft.time} onChange={e => setDraft({ time: e.target.value })}><option value="">{t.choose}</option>{timeOptions.map(o => <option key={o.value} value={o.value}>{language === "zh" ? o.value : o.en}</option>)}</select></label>
+                <CityField draft={draft} setDraft={setDraft} label={t.city} language={language} />
+                <label><span className="field-name">{t.ageLabel} <small>{t.optionalFill}</small></span>
                   <div className="age-field">
                     <input inputMode="numeric" value={draft.age} placeholder="26" onChange={e => setDraft({ age: e.target.value.replace(/\D/g, "").slice(0, 3) })} />
-                    <span>岁</span>
+                    <span>{t.ageUnit}</span>
                   </div>
                 </label>
                 <GenderField draft={draft} setDraft={setDraft} t={t} />
-                {(draft.time === "小时候" || draft.time === "很久以前") && <label className="field-wide"><span className="field-name">{t.lifeStage}</span><select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">请选择</option>{["童年", "中学", "大学", "青年探索", "初入职场", "成年回望"].map(x => <option key={x}>{x}</option>)}</select></label>}
+                {(draft.time === "小时候" || draft.time === "很久以前") && <label className="field-wide"><span className="field-name">{t.lifeStage}</span><select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">{t.choose}</option>{stageOptions.map(o => <option key={o.value} value={o.value}>{language === "zh" ? o.value : o.en}</option>)}</select></label>}
               </div>
               {draft.gender === "其他" && <p className="gender-hint">{t.genderOtherHint}<small>{t.genderOtherNote}</small></p>}
               {(showCityHint || showAgeHint) && (
                 <div className="ai-hint">
-                  <Sparkles size={15} /><span>AI 从你的文字里读到：</span>
+                  <Sparkles size={15} /><span>{t.aiRead}</span>
                   {showCityHint && hints.city && (
                     <button onClick={() => setDraft({ city: hints.city!.name, cityEn: hints.city!.en, cityCountry: hints.city!.country, cityLat: hints.city!.lat, cityLon: hints.city!.lon })}>
-                      填入城市「{hints.city.name}」
+                      {language === "zh" ? `填入城市「${hints.city.name}」` : `Use ${hints.city.en || hints.city.name}`}
                     </button>
                   )}
-                  {showAgeHint && <button onClick={() => setDraft({ age: String(hints.age) })}>填入年龄「{hints.age} 岁」</button>}
-                  <small>只是建议，可以忽略或改掉</small>
+                  {showAgeHint && <button onClick={() => setDraft({ age: String(hints.age) })}>{language === "zh" ? `填入年龄「${hints.age} 岁」` : `Use age ${hints.age}`}</button>}
+                  <small>{t.aiHintNote}</small>
                 </div>
               )}
-              <div className="field-group"><span className="field-label">{t.people} <small>{t.multi}</small></span><div className="chip-row">{["自己", "家人", "恋人", "朋友", "陌生人", "老师", "同事"].map(x => <button className={draft.people.includes(x) ? "selected" : ""} onClick={() => choosePerson(x)} key={x}>{x}</button>)}</div></div>
+              <div className="field-group"><span className="field-label">{t.people} <small>{t.multi}</small></span><div className="chip-row">{peopleOptions.map(o => <button className={draft.people.includes(o.value) ? "selected" : ""} onClick={() => choosePerson(o.value)} key={o.value}>{language === "zh" ? o.value : o.en}</button>)}</div></div>
             </div>
             {!focusMode && <div className="stage-actions split story-submit-only">
               <span className={`completion-hint ${submitAttempted && !canContinueCollection ? "warn" : ""}`}>
-                {submitAttempted && !canContinueCollection ? (language === "zh" ? `还差一点：${missingCollection.join("、")}。` : `Almost there: ${missingCollection.join(", ")}.`) : (language === "zh" ? "完善故事信息后，就可以生成你的故事页面。" : "Complete the story details to generate your story page.")}
+                {submitAttempted && !canContinueCollection ? (language === "zh" ? `还差一点：记得填${missingCollection.join("、")}。` : `Almost there: remember to fill out ${missingCollection.join(", ")}.`) : (language === "zh" ? "完善故事信息后，就可以生成你的故事页面。" : "Complete the story details to generate your story page.")}
               </span>
               <PrimaryButton onClick={() => {
                 if (!canContinueCollection) {
@@ -1332,6 +1541,26 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
         </section>
       )}
 
+      {/*
+        直接打开 /StoryPage 但还没有分析结果时（比如刷新、或后端没起来），
+        原本整页什么都不渲染 —— 只剩一个页头，看起来像崩了。这里给一个明确出口。
+      */}
+      {step === 3 && !state.analysis && (
+        <section className="wizard-stage">
+          <div className="section-intro guide-intro-copy">
+            <p className="eyebrow">{t.finalSay}</p>
+            <h1>{language === "zh" ? <>这一步还没有内容</> : <>Nothing to confirm yet</>}</h1>
+            <p>{language === "zh"
+              ? "这一页需要先完成前面的写作和 AI 整理。可能是刷新后草稿没接上，或者后端服务没有启动。"
+              : "This page needs the writing and AI pass before it. Your draft may not have reloaded, or the backend isn't running."}</p>
+          </div>
+          <div className="stage-actions">
+            <PrimaryButton onClick={() => update({ wizardStep: 0 })}>
+              {language === "zh" ? "回到第一步" : "Back to step one"}
+            </PrimaryButton>
+          </div>
+        </section>
+      )}
       {step === 3 && state.analysis && (
         <section className="confirm-layout">
           <div className="confirm-story story-page-editor">
@@ -1339,10 +1568,10 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
             <h1>{t.confirmTitle}</h1>
             <div className="compact-edit-grid">
               {/* 四个 label 都统一用 .field-name 包住标题文字，标签行等高，控件才会对齐 */}
-              <label><span className="field-name">{t.storyTitle}</span><input value={draft.title || state.analysis.suggestedTitle} onChange={e => setDraft({ title: e.target.value })} /></label>
-              <label><span className="field-name">时间</span><select value={draft.time} onChange={e => setDraft({ time: e.target.value })}><option value="">请选择</option>{["今天", "最近一年", "小时候", "很久以前", "不确定"].map(x => <option key={x}>{x}</option>)}</select></label>
-              <CityField draft={draft} setDraft={setDraft} label="地点" />
-              <label><span className="field-name">人生阶段</span><select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">请选择</option>{["童年", "中学", "大学", "青年探索", "初入职场", "成年回望"].map(x => <option key={x}>{x}</option>)}</select></label>
+              <label><span className="field-name">{t.storyTitle}</span><input value={draft.title} placeholder={state.analysis.suggestedTitle} onChange={e => setDraft({ title: e.target.value })} /></label>
+              <label><span className="field-name">{t.confirmTime}</span><select value={draft.time} onChange={e => setDraft({ time: e.target.value })}><option value="">{t.choose}</option>{timeOptions.map(o => <option key={o.value} value={o.value}>{language === "zh" ? o.value : o.en}</option>)}</select></label>
+              <CityField draft={draft} setDraft={setDraft} label={t.confirmPlace} language={language} />
+              <label><span className="field-name">{t.confirmStage}</span><select value={draft.stage} onChange={e => setDraft({ stage: e.target.value })}><option value="">{t.choose}</option>{stageOptions.map(o => <option key={o.value} value={o.value}>{language === "zh" ? o.value : o.en}</option>)}</select></label>
               <GenderField draft={draft} setDraft={setDraft} t={t} wide />
             </div>
             {draft.gender === "其他" && <p className="gender-hint">{t.genderOtherHint}<small>{t.genderOtherNote}</small></p>}
@@ -1402,7 +1631,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
                   <div className="story-tag-chips">
                     {activeStoryTags.themes.map(tag => (
                       <button className={`story-tag-chip ${tag.status === "pending_review" ? "pending" : ""}`} key={tag.value} onClick={() => removeThemeTag(tag.value)}>
-                        {tag.value}{tag.status === "pending_review" && <small>{language === "zh" ? "审核中" : "Reviewing"}</small>}<X size={13} />
+                        {themeLabel(tag.value, language)}{tag.status === "pending_review" && <small>{language === "zh" ? "审核中" : "Reviewing"}</small>}<X size={13} />
                       </button>
                     ))}
                     <button className="add-tag story-tag-edit" disabled={activeStoryTags.themes.length >= 2} onClick={() => setTagEditing(tagEditing === "themes" ? null : "themes")}>{language === "zh" ? "＋ 其他" : "+ Custom"}</button>
@@ -1413,7 +1642,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
                       <span>{language === "zh" ? "最近移除" : "Recently removed"}</span>
                       {removedThemeTags.map(tag => (
                         <button key={tag.value} disabled={activeStoryTags.themes.length >= 2} onClick={() => restoreThemeTag(tag)}>
-                          ↶ {tag.value}
+                          ↶ {themeLabel(tag.value, language)}
                         </button>
                       ))}
                     </div>
@@ -1421,7 +1650,7 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
                   {tagEditing === "themes" && (
                     <div className="tag-popover custom-theme-editor">
                       <div className="custom-theme-row">
-                        <input value={customTheme} maxLength={4} placeholder={language === "zh" ? "2 个汉字" : "2 Chinese chars"} onChange={event => { setCustomTheme(event.target.value); setThemeTagError(""); }} />
+                        <input value={customTheme} maxLength={16} placeholder={language === "zh" ? "两个字，例如「告别」" : "One short word, e.g. Belonging"} onChange={event => { setCustomTheme(event.target.value); setThemeTagError(""); }} />
                         <button className="button button-ghost" disabled={activeStoryTags.themes.length >= 2} onClick={addCustomThemeTag}>{language === "zh" ? "添加" : "Add"}</button>
                       </div>
                       <small className={themeTagError ? "tag-error" : "tag-helper"}>{themeTagError || (language === "zh" ? "自定义主题会进入后台审核，不影响发布。" : "Custom themes enter review and will not block publishing.")}</small>
@@ -1431,18 +1660,21 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
               </div>
             </section>
             <fieldset className="image-style-picker">
-              <legend>生成的图片风格</legend>
-              <p>悬浮或聚焦可以查看风格示意图</p>
+              <legend>{t.styleLegend}</legend>
+              <p>{t.styleHint}</p>
               <div className="image-style-options">
-                {imageStyleOptions.map(option => <label className={`image-style-option ${imageStyle === option.id ? "selected" : ""}`} key={option.id}>
-                  <input type="radio" name="image-style" value={option.id} checked={imageStyle === option.id} onChange={() => chooseImageStyle(option.id)} />
-                  <span className="image-style-copy"><b>{option.label}</b><small>{option.description}</small></span>
-                  <span className="image-style-peek"><Eye size={14} />示意图</span>
-                  <figure className="image-style-popover">
-                    <img src={option.preview} alt={`${option.label}示意图`} />
-                    <figcaption>{option.label}</figcaption>
-                  </figure>
-                </label>)}
+                {imageStyleOptions.map(option => {
+                  const styleLabel = language === "zh" ? option.label : option.labelEn;
+                  return <label className={`image-style-option ${imageStyle === option.id ? "selected" : ""}`} key={option.id}>
+                    <input type="radio" name="image-style" value={option.id} checked={imageStyle === option.id} onChange={() => chooseImageStyle(option.id)} />
+                    <span className="image-style-copy"><b>{styleLabel}</b><small>{language === "zh" ? option.description : option.descriptionEn}</small></span>
+                    <span className="image-style-peek"><Eye size={14} />{t.stylePeek}</span>
+                    <figure className="image-style-popover">
+                      <img src={option.preview} alt={language === "zh" ? `${styleLabel}示意图` : `${styleLabel} sample`} />
+                      <figcaption>{styleLabel}</figcaption>
+                    </figure>
+                  </label>;
+                })}
               </div>
             </fieldset>
             <div className="comic-preview">
@@ -1450,48 +1682,92 @@ function Wizard({ state, update, onPublished, onHome, themeMode, onThemeModeChan
                 {storyImage ? (
                   <img src={storyImage} alt={`《${draft.title || state.analysis!.suggestedTitle}》的故事高光插画`} />
                 ) : imageStatus === "generating" ? (
-                  <div className="comic-state"><LoaderCircle className="comic-spinner" size={38} /><b>正在寻找故事的高光时刻…</b><small>千问会先提取最值得画下来的瞬间，万相随后生成一张 {imageStyleOptions.find(option => option.id === imageStyle)?.label} 插画</small></div>
+                  <div className="comic-state"><LoaderCircle className="comic-spinner" size={38} /><b>{t.imgSearching}</b><small>{(() => { const o = imageStyleOptions.find(x => x.id === imageStyle); return language === "zh" ? `千问会先提取最值得画下来的瞬间，万相随后生成一张${o?.label}插画` : `Qwen picks the moment worth drawing, then Wanxiang renders it as a ${o?.labelEn} illustration`; })()}</small></div>
                 ) : imageStatus === "failed" ? (
-                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>这次没有完成故事图片</b><small>{imageError}</small><div className="comic-fallback-actions"><button className="retry-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成图片</button><button className="skip-comic" disabled={publishing} onClick={attemptPublish}>{publishing ? "正在发布…" : "跳过图片，继续发布"}</button></div></div>
+                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>{t.imgFailed}</b><small>{imageError}</small><div className="comic-fallback-actions"><button className="retry-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成图片</button><button className="skip-comic" disabled={publishing} onClick={attemptPublish}>{publishing ? "正在发布…" : "跳过图片，继续发布"}</button></div></div>
                 ) : (
-                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>把故事高光变成一张插画</b><small>AI 会从正文中选择一个真实、可画的关键瞬间，并按你选择的风格生成</small><button className="retry-comic" onClick={() => void runImageGeneration()}>生成故事图片</button></div>
+                  <div className="comic-state"><Sparkles className="comic-state-icon" size={38} /><b>{t.imgIdle}</b><small>{t.imgIdleNote}</small><button className="retry-comic" onClick={() => void runImageGeneration()}>生成故事图片</button></div>
                 )}
               </div>
               {storyImage && <div className="comic-actions"><button className="download-comic" onClick={() => downloadStoryImage(storyImage, draft.title || state.analysis!.suggestedTitle, imageStyle)}><Download size={16} />下载故事图片</button><button className="regenerate-comic" onClick={() => void runImageGeneration()}><RefreshCw size={15} />重新生成</button></div>}
-              {storyHighlight && <details className="comic-storyboard"><summary>查看 AI 选中的高光时刻</summary><div className="highlight-detail"><b>{storyHighlight.title}</b><p>{storyHighlight.moment}</p><span>{storyHighlight.scene} · {storyHighlight.action}</span><em>{storyHighlight.emotion}</em>{imagePrompt && <details><summary>查看绘画 Prompt</summary><p>{imagePrompt}</p></details>}</div></details>}
-              <p className="comic-privacy">生图是可选项，不会阻止你发布故事。生成时会将故事正文发送给阿里云百炼；每次只生成一张图片并按一张计费。图片只保留在当前页面，刷新后消失。</p>
+              {storyHighlight && <details className="comic-storyboard"><summary>{t.imgStoryboard}</summary><div className="highlight-detail"><b>{storyHighlight.title}</b><p>{storyHighlight.moment}</p><span>{storyHighlight.scene} · {storyHighlight.action}</span><em>{storyHighlight.emotion}</em>{imagePrompt && <details><summary>查看绘画 Prompt</summary><p>{imagePrompt}</p></details>}</div></details>}
+              <p className="comic-privacy">{t.imgPrivacy}</p>
             </div>
-            <div className="publish-note"><Check size={17} />确认后将进入模拟安全检查，并匿名加入故事池。</div>
+            <div className="publish-note"><Check size={17} />{t.publishNote}</div>
             {publishError && <p className="api-error" role="alert">{publishError}</p>}
-            <PrimaryButton disabled={publishing} onClick={attemptPublish}>{publishing ? "正在发布…" : t.publish}</PrimaryButton>
+            <PrimaryButton disabled={publishing} onClick={attemptPublish}>{publishing ? (language === "zh" ? "正在发布…" : "Publishing…") : t.publish}</PrimaryButton>
           </div>
         </section>
       )}
       {moderation && (
         <div className="modal-backdrop">
-          <div className="report-dialog moderation-dialog">
-            {moderation.flags.map(flag => (
-              <div className="moderation-block" key={flag}>
-                <h2>{mCopy[flag].title}</h2>
-                <p>{mCopy[flag].body}</p>
-              </div>
-            ))}
-            {moderation.samples.length > 0 && (
-              <div className="moderation-samples">
-                <span>{mCopy.detected}</span>
-                {moderation.samples.map((sample, i) => <code key={i}>{sample}</code>)}
-              </div>
+          <div className={`report-dialog moderation-dialog level-${moderation.level ?? "L1"}`}>
+            {/* 危机信号：安全优先，不走常规审核流程，也不谈发布 */}
+            {moderation.crisis ? (
+              <>
+                <div className="moderation-block crisis">
+                  <h2>{mCopy.categories.crisis.title}</h2>
+                  <p>{mCopy.categories.crisis.body}</p>
+                </div>
+                <div className="dialog-actions">
+                  <button className="button button-ghost" onClick={() => { setModeration(null); setAppealNote(""); }}>{mCopy.crisisSecondary}</button>
+                  <button className="button button-primary" onClick={() => { setModeration(null); setAppealNote(""); }}>{mCopy.crisisAction}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                {[...new Set(moderation.hits.map(hit => hit.category))].map(category => (
+                  <div className="moderation-block" key={category}>
+                    <h2>{mCopy.categories[category].title}</h2>
+                    <p>{mCopy.categories[category].body}</p>
+                  </div>
+                ))}
+                {moderation.hits.some(hit => hit.sample) && (
+                  <div className="moderation-samples">
+                    <span>{mCopy.detected}</span>
+                    {/* 同一个词标题和正文都有时要两边都说，不然用户只改一处就以为过了 */}
+                    {moderation.hits.filter(hit => hit.sample).map((hit, i) => (
+                      <code key={i}>
+                        {hit.sample}
+                        <em>{hit.where === "both" ? mCopy.whereBoth : hit.where === "title" ? mCopy.whereTitle : mCopy.whereBody}</em>
+                      </code>
+                    ))}
+                  </div>
+                )}
+
+                {/* L1：可优化但不影响发布 —— 「仍然提交」是明确、不带愧疚感的按钮 */}
+                {moderation.level === "L1" && (
+                  <>
+                    <p className="moderation-note">{mCopy.submitNote}</p>
+                    <div className="dialog-actions">
+                      <button className="button button-ghost" onClick={() => { setModeration(null); setAppealNote(""); }}>{mCopy.revise}</button>
+                      <button className="button button-primary" onClick={() => { setModeration(null); void runPublish(); }}>{mCopy.submit}</button>
+                    </div>
+                  </>
+                )}
+
+                {/* L2：不建议公开 —— 提供私密保存，而不是彻底拦截 */}
+                {moderation.level === "L2" && (
+                  <>
+                    <p className="moderation-note">{mCopy.noteL2}</p>
+                    <div className="dialog-actions">
+                      <button className="button button-ghost" onClick={() => { setModeration(null); setAppealNote(""); }}>{mCopy.applyPublic}</button>
+                      <button className="button button-primary" onClick={() => sendToReview("uncertain")}>{mCopy.savePrivate}</button>
+                    </div>
+                  </>
+                )}
+
+                {/* L3：触及底线 —— 不提供「仍然提交」，但要说明已转人工，避免「被消失」感 */}
+                {moderation.level === "L3" && (
+                  <>
+                    <p className="moderation-note">{mCopy.noteL3}</p>
+                    <div className="dialog-actions">
+                      <button className="button button-primary" onClick={() => sendToReview("uncertain")}>{mCopy.writeAnother}</button>
+                    </div>
+                  </>
+                )}
+              </>
             )}
-            <label className="moderation-appeal">
-              <span className="field-name">{mCopy.appeal}</span>
-              <input value={appealNote} placeholder={mCopy.appealPlaceholder} onChange={e => setAppealNote(e.target.value)} />
-            </label>
-            <p className="moderation-note">{mCopy.submitNote}</p>
-            <div className="dialog-actions three">
-              <button className="button button-ghost" onClick={() => { setModeration(null); setAppealNote(""); }}>{mCopy.revise}</button>
-              <button className="button button-ghost" onClick={() => sendToReview("appealed")}>{mCopy.appeal}</button>
-              <button className="button button-primary" onClick={() => sendToReview("uncertain")}>{mCopy.submit}</button>
-            </div>
           </div>
         </div>
       )}
@@ -1523,7 +1799,7 @@ function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThe
       <header className="topbar app-shell-header"><Logo onClick={onHome} /><div className="topbar-actions"><button className="button button-ghost mini" onClick={onBack}><ArrowLeft size={16} /> {t.backToTraits}</button><ThemeToggle language={state.language} themeMode={themeMode} onChange={onThemeModeChange} /><LanguageSelect language={state.language} onChange={language => update({ language })} /></div></header>
       <section className="resonance-hero">
         <div><p className="eyebrow">{state.language === "zh" ? "你的故事已经成为一颗星星" : "Your story is now a star"}</p><h1>{t.resonanceTitle}</h1>{t.resonanceSub && <p>{t.resonanceSub}</p>}</div>
-        <div className="new-star"><i /><span>你的星点</span><small>{state.draft.city || "未知城市"} · {state.draft.title || state.analysis?.suggestedTitle}</small></div>
+        <div className="new-star"><i /><span>{t.yourStar}</span><small>{state.draft.city || t.unknownCity} · {state.draft.title || state.analysis?.suggestedTitle}</small></div>
       </section>
       <section className="dimension-grid">
         {dimensions.map(dim => <article key={dim.key} className="dimension-card">
@@ -1543,15 +1819,21 @@ function Resonance({ state, update, onBack, onContinue, onHome, themeMode, onThe
   );
 }
 
-function StoryDetail({ story, reaction, onReact, onClose, onReport }: {
-  story: Story; reaction: Reaction; onReact: (reaction: Reaction) => void; onClose: () => void; onReport: () => void;
+const visualStatusLabel = (status: Story["visualStatus"], language: Language) => {
+  const zh = { ready: "故事意象 · 本地占位", generating: "意象正在生成", failed: "意象暂时迷路了", blocked: "意象未通过审核" };
+  const en = { ready: "Story image · local placeholder", generating: "Generating the image", failed: "The image got lost for now", blocked: "Image did not pass review" };
+  return (language === "zh" ? zh : en)[status];
+};
+
+function StoryDetail({ story, reaction, onReact, onClose, onReport, language }: {
+  story: Story; reaction: Reaction; onReact: (reaction: Reaction) => void; onClose: () => void; onReport: () => void; language: Language;
 }) {
   return <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
     <article className="story-modal">
       <button className="modal-close" onClick={onClose}><X size={20} /></button>
       <div className={`visual visual-${story.visualStatus}`}>
         <span>✦</span>
-        <div>{story.visualStatus === "ready" ? "故事意象 · 本地占位" : story.visualStatus === "generating" ? "意象正在生成" : story.visualStatus === "failed" ? "意象暂时迷路了" : "意象未通过审核"}</div>
+        <div>{visualStatusLabel(story.visualStatus, language)}</div>
       </div>
       <div className="story-content">
         <div className="story-meta"><Pill tone="lime">{story.theme}</Pill><span>{story.city}</span><span>{story.stage}</span><span>{story.readMinutes} 分钟阅读</span></div>
@@ -1622,18 +1904,18 @@ function Recommendations({ state, update, onEnterAtlas, onHome, themeMode, onThe
     <header className="topbar app-shell-header"><Logo onClick={onHome} /><div className="topbar-actions"><ThemeToggle language={state.language} themeMode={themeMode} onChange={onThemeModeChange} /><LanguageSelect language={state.language} onChange={language => update({ language })} /></div></header>
     <section className="recommend-heading"><div><p className="eyebrow">FIRST CONSTELLATION</p><h1>为你找到的<span className="serif">五则故事。</span></h1><p>至少打开一则，就可以进入完整轻量星图。你不需要读完固定数量。</p></div><PrimaryButton disabled={state.openedRecommendations.length < 1} onClick={onEnterAtlas}>进入故事星图</PrimaryButton></section>
     <section className="recommend-grid">
-      {loading && <p>正在为你寻找故事…</p>}
-      {!loading && recommended.length === 0 && <p>故事池还没有足够的公开故事，稍后再来看看。</p>}
+      {loading && <p>{state.language === "zh" ? "正在为你寻找故事…" : "Finding stories for you…"}</p>}
+      {!loading && recommended.length === 0 && <p>{state.language === "zh" ? "故事池还没有足够的公开故事，稍后再来看看。" : "There aren't enough public stories yet. Check back a little later."}</p>}
       {recommended.map((story, i) => <button className={`recommend-card card-${i}`} onClick={() => open(story)} key={story.id}>
         <div className="rec-orbit"><span style={{ background: themeColors[story.theme] }} /><i /></div>
         <div className="rec-index">0{i + 1}</div>
         <div className="rec-meta"><Pill>{story.theme}</Pill><span>{story.city}</span></div>
         <h2>{story.title}</h2><p>{story.excerpt}</p>
         <div className="rec-reason"><Sparkles size={15} />{story.reason}</div>
-        <footer><span>{story.readMinutes} 分钟</span><span>{state.openedRecommendations.includes(story.id) ? "已打开 ✓" : "阅读故事 →"}</span></footer>
+        <footer><span>{story.readMinutes} {copy[state.language].minutes}</span><span>{state.openedRecommendations.includes(story.id) ? (state.language === "zh" ? "已打开 ✓" : "Opened ✓") : (state.language === "zh" ? "阅读故事 →" : "Read story →")}</span></footer>
       </button>)}
     </section>
-    {detail && <StoryDetail story={detail} reaction={state.reactions[detail.id] ?? null} onReact={r => react(detail.id, r)} onClose={() => setDetail(null)} onReport={() => setReport(detail)} />}
+    {detail && <StoryDetail story={detail} reaction={state.reactions[detail.id] ?? null} onReact={r => react(detail.id, r)} onClose={() => setDetail(null)} onReport={() => setReport(detail)} language={state.language} />}
     {report && <ReportDialog story={report} onClose={() => setReport(null)} onSubmit={(reason,note) => api.report(report.id,reason,note).then(() => undefined)} />}
   </main>;
 }
@@ -1701,7 +1983,7 @@ function Atlas({ state, update, onWrite, onHome }: { state: AppState; update: Ap
         </div> : <div className="atlas-cards">{visible.map(story => <button onClick={() => setDetail(story)} key={story.id}><div className="story-color" style={{ background: themeColors[story.theme] }} /><div className="story-card-meta"><Pill>{story.theme}</Pill><span>{story.city} · {story.stage}</span></div><h2>{story.title}</h2><p>{story.excerpt}</p><footer><span>{story.readMinutes} {t.minutes}</span><ChevronRight size={17} /></footer></button>)}</div>}
       </>}
     </section>
-    {detail && <StoryDetail story={detail} reaction={state.reactions[detail.id] ?? null} onReact={r => react(detail.id, r)} onClose={() => setDetail(null)} onReport={() => setReport(detail)} />}
+    {detail && <StoryDetail story={detail} reaction={state.reactions[detail.id] ?? null} onReact={r => react(detail.id, r)} onClose={() => setDetail(null)} onReport={() => setReport(detail)} language={state.language} />}
     {report && <ReportDialog story={report} onClose={() => setReport(null)} />}
   </main>;
 }
