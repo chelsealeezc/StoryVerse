@@ -6,8 +6,8 @@ import {
 } from "lucide-react";
 import { extractHints } from "./ai";
 import { api, type RecommendationItem, type User } from "./api";
-import crayonStylePreview from "./assets/image-styles/crayon.jpg";
-import zineStylePreview from "./assets/image-styles/zine.svg";
+import crayonStylePreview from "./assets/image-styles/clay-3d.png";
+import zineStylePreview from "./assets/image-styles/indie-zine.png";
 import minimalRealisticStylePreview from "./assets/image-styles/minimal-realistic.jpg";
 import retroCollageStylePreview from "./assets/image-styles/retro-collage.jpg";
 import { guides, icebreakers, stories } from "./data";
@@ -54,7 +54,7 @@ const imageStyleOptions: Array<{
   preview: string;
 }> = [
   // 示意图只是让用户预期成图调性，真正的图仍由万相按 server/image-generation.ts 里的 prompt 生成。
-  { id: "crayon", label: "卡通蜡笔风", labelEn: "Cartoon clay", description: "阿德曼式定格黏土，手工捏塑感与荒诞喜剧气质", descriptionEn: "Aardman-style stop-motion clay: fingerprints, matte surfaces, gentle absurdity", preview: crayonStylePreview },
+  { id: "crayon", label: "3D粘土风", labelEn: "3D clay", description: "阿德曼式定格黏土，手工捏塑感与荒诞喜剧气质", descriptionEn: "Aardman-style stop-motion clay: fingerprints, matte surfaces, gentle absurdity", preview: crayonStylePreview },
   { id: "zine", label: "独立杂志风", labelEn: "Indie zine", description: "半调网点、双色印刷与大量留白的小志排版感", descriptionEn: "Halftone dots, two-colour riso printing and a lot of white space", preview: zineStylePreview },
   { id: "minimal-realistic", label: "日本画风", labelEn: "Japanese poster", description: "极简几何剪影、少量实色油墨与大面积留白", descriptionEn: "Minimal geometric silhouettes, a handful of flat inks, generous negative space", preview: minimalRealisticStylePreview },
   { id: "retro-collage", label: "复古拼贴风", labelEn: "Retro collage", description: "撕纸层次、粉彩纸纹与温暖编辑感", descriptionEn: "Torn-paper layers, pastel stock, a warm editorial feel", preview: retroCollageStylePreview },
