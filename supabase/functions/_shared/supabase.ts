@@ -46,7 +46,13 @@ export async function requireUser(request: Request): Promise<{ user: User; clien
 
 export async function requireAdmin(request: Request) {
   const context = await requireUser(request);
-  const { data, error } = await context.client.rpc("is_admin", { check_user_id: context.user.id });
-  if (error || data !== true) throw new ApiError(403, "ADMIN_REQUIRED", "这个入口仅供管理员使用。");
+  const { data: profile, error } = await adminClient()
+    .from("profiles")
+    .select("role,status")
+    .eq("id", context.user.id)
+    .maybeSingle();
+  if (error || profile?.role !== "admin" || profile.status !== "active") {
+    throw new ApiError(403, "ADMIN_REQUIRED", "这个入口仅供管理员使用。");
+  }
   return context;
 }
