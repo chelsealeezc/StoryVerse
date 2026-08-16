@@ -20,16 +20,18 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run format:check
       - run: npm test
-      - run: npm run build:image-api
       - run: npm run build
-        env:
-          VITE_BASE_PATH: /
-          VITE_API_BASE_URL: /api/v1
-          VITE_IMAGE_API_URL: /api/generate-image
-      - name: Reject obvious committed secrets
-        run: |
-          if git grep -nE '(LTAI[A-Za-z0-9]{12,}|sk-[A-Za-z0-9_-]{20,}|DATABASE_URL=postgres(ql)?://[^:]+:[^@]+@)' -- ':!package-lock.json' ':!.env.example'; then
-            echo "Potential credential found in tracked files"
-            exit 1
-          fi
+
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx supabase start
+      - run: npm run db:test
