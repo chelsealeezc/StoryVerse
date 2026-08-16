@@ -11,4 +11,3 @@ vite.config.d.ts
 .env
 .env.*
 !.env.example
-!supabase/functions/.env.example
