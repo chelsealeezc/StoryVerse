@@ -75,8 +75,9 @@ from public.stories story
 where story.status = 'published';
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000999', true);
-select set_config('request.jwt.claim.role', 'authenticated', true);
-create temporary table test_batch as select public.refresh_recommendations(100) as id;
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table test_batch as
+select public.refresh_recommendations('00000000-0000-0000-0000-000000000999'::uuid, 100) as id;
 
 select is(
   (select count(*)::integer from public.recommendation_results where batch_id = (select id from test_batch)),
