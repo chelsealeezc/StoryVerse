@@ -54,4 +54,17 @@
 
 - 正式发布分支：`agent/storyverse-production-release`
 - 发布 PR：[#18](https://github.com/chelsealeezc/StoryVerse/pull/18)
-- GitHub Pages 与最终生产页面验证在 PR 合并后执行。
+- 正式发布提交：`c6f0796ee4d4f5796886e1da267ffc981557ae7d`
+- PR 分支 CI：前端验证与数据库任务通过。
+- `main` CI：通过。
+- GitHub Pages 构建与部署：通过。
+
+### 生产页面
+
+- 生产地址：<https://chelsealeezc.github.io/StoryVerse/>
+- 首页 HTTP 200，桌面视觉、注册/登录入口、中英文切换和静态资源加载正常。
+- 浏览器控制台没有 error 或 warning。
+- 生产 JavaScript 包内的 Supabase 地址为 `https://zgyrbtdyraxglxhbkazp.supabase.co`。
+- 页面不再出现旧“审核人员入口”或邮箱/电话注册。
+- 直接访问 `/StoryVerse/StarLobby` 时，GitHub Pages 返回 SPA 的 `404.html`，应用可以正常启动并按未登录规则显示首页，不会白屏。HTTP 状态仍为 GitHub Pages 静态托管的 404，这是当前深层路由回退方式的已知限制。
+- 生产移动端没有再次使用独立设备执行全流程；相同构建的 390px 本地回归已经通过。
