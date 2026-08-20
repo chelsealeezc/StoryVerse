@@ -1,0 +1,374 @@
+begin;
+
+create extension if not exists pgtap with schema extensions;
+select plan(57);
+
+select has_table('public', 'profiles', 'profiles table exists');
+select has_table('public', 'stories', 'stories table exists');
+select has_table('public', 'story_embeddings', 'story embeddings table exists');
+select has_table('public', 'review_cases', 'human review table exists');
+select has_table('public', 'recommendation_batches', 'recommendation batches table exists');
+select has_table('public', 'recommendation_results', 'recommendation results table exists');
+select has_table('public', 'admin_audit_logs', 'admin audit log exists');
+select has_table('public', 'image_generation_attempts', 'image generation attempts table exists');
+select has_table('public', 'story_translations', 'story translation cache exists');
+select is(
+  (select indexdef like 'CREATE UNIQUE INDEX%' from pg_indexes
+    where schemaname = 'public' and indexname = 'generated_images_one_per_story_idx'),
+  true,
+  'generated images have a database-level one-row-per-story constraint'
+);
+select is(
+  (select count(*)::integer from pg_constraint where conname = 'account_credentials_security_question'),
+  1,
+  'security questions are constrained at the database layer'
+);
+select is(
+  (select count(*)::integer from pg_constraint where conname = 'stories_gender_allowed'),
+  1,
+  'published story gender values are constrained at the database layer'
+);
+select is(
+  (select count(*)::integer from pg_constraint where conname = 'story_drafts_gender_allowed'),
+  1,
+  'draft gender values allow empty drafts but reject forged values'
+);
+
+select is((select count(*)::integer from public.story_types), 21, 'exactly 21 story types are seeded');
+select is((select count(*)::integer from public.algorithm_configs where status = 'published'), 1, 'one default algorithm version is published');
+select is(public.stage_index('学龄期'), 0::double precision, 'school age is the first life-stage index');
+select is(public.stage_index('老年期'), 4::double precision, 'old age is the final life-stage index');
+select ok(public.haversine_km(39.9042, 116.4074, 39.9042, 116.4074) < 0.001, 'same-city distance is zero');
+select ok(public.haversine_km(39.9042, 116.4074, 31.2304, 121.4737) between 1000 and 1200, 'Beijing-Shanghai distance is plausible');
+
+select policies_are('public', 'stories', array['stories_read'], 'stories expose only the explicit read policy');
+select policies_are('public', 'account_credentials', array[]::text[], 'security answers have no user-facing policies');
+select policies_are('public', 'admin_audit_logs', array['audit_admin'], 'audit records are admin-only');
+select policies_are('public', 'story_translations', array['story_translations_read'], 'story translations have one read policy');
+
+insert into auth.users (id) values
+  ('00000000-0000-0000-0000-000000000998'),
+  ('00000000-0000-0000-0000-000000000999'),
+  ('00000000-0000-0000-0000-000000000997');
+
+insert into public.profiles (id, username, display_name, anonymous_number) values
+  ('00000000-0000-0000-0000-000000000999', 'reference_user', '参照用户', 999),
+  ('00000000-0000-0000-0000-000000000998', 'candidate_user', '候选用户', 998),
+  ('00000000-0000-0000-0000-000000000997', 'private_user', '私密用户', 997);
+
+insert into public.stories (
+  id, user_id, author_display_name, title, body, mood, life_stage, age, gender, city,
+  latitude, longitude, people, status, moderation_decision, final_type_id, final_themes,
+  content_hash, published_at
+) values (
+  '10000000-0000-0000-0000-000000000000',
+  '00000000-0000-0000-0000-000000000999',
+  '参照用户', '参照故事', repeat('字', 100), '平和自足', '成年早期', 30, '女', '原点城',
+  0, 0, array['自己'], 'published', 'pass', 'career_achievement', array['职业成长', '自我肯定'],
+  'reference-hash', now()
+), (
+  '20000000-0000-0000-0000-000000000000',
+  '00000000-0000-0000-0000-000000000997',
+  '私密用户', '不公开故事', repeat('字', 100), '平和自足', '成年早期', 30, '女', '原点城',
+  0, 0, array['自己'], 'private', 'pass', 'career_achievement', array['职业成长', '自我肯定'],
+  'private-hash', null
+);
+
+select throws_ok(
+  $$insert into public.reactions (user_id, story_id, value) values (
+    '00000000-0000-0000-0000-000000000999',
+    '10000000-0000-0000-0000-000000000000',
+    'like'
+  )$$,
+  '42501',
+  'SELF_REACTION_NOT_ALLOWED',
+  'database rejects reacting to your own story'
+);
+select throws_ok(
+  $$insert into public.reports (reporter_id, story_id, reason) values (
+    '00000000-0000-0000-0000-000000000999',
+    '10000000-0000-0000-0000-000000000000',
+    'other'
+  )$$,
+  '42501',
+  'SELF_REPORT_NOT_ALLOWED',
+  'database rejects reporting your own story'
+);
+
+insert into public.stories (
+  id, user_id, author_display_name, title, body, mood, life_stage, age, gender, city,
+  latitude, longitude, people, status, moderation_decision, final_type_id, final_themes,
+  content_hash, published_at
+)
+select
+  ('30000000-0000-0000-0000-' || lpad(series::text, 12, '0'))::uuid,
+  '00000000-0000-0000-0000-000000000998'::uuid,
+  '候选用户', '候选故事 ' || series, repeat('字', 100), '平和自足', '成年早期', 30, '女', '候选城',
+  0, series, array['自己'], 'published', 'pass', 'career_achievement', array['职业成长', '自我肯定'],
+  'candidate-' || series, now()
+from generate_series(1, 101) series;
+
+insert into public.story_embeddings (
+  story_id, story_embedding, theme_embedding, model, model_version, content_hash, theme_hash
+)
+select
+  story.id,
+  ('[' || array_to_string(array_fill(1.0, array[1024]), ',') || ']')::extensions.vector(1024),
+  ('[' || array_to_string(array_fill(1.0, array[1024]), ',') || ']')::extensions.vector(1024),
+  'test-embedding', 'v1', story.content_hash, 'same-theme'
+from public.stories story
+where story.status = 'published'
+  and story.user_id in (
+    '00000000-0000-0000-0000-000000000998'::uuid,
+    '00000000-0000-0000-0000-000000000999'::uuid
+  );
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000999', true);
+select set_config('request.jwt.claim.role', 'service_role', true);
+create temporary table test_batch as
+select public.refresh_recommendations('00000000-0000-0000-0000-000000000999'::uuid, 100) as id;
+
+select is(
+  (select count(*)::integer from public.recommendation_results where batch_id = (select id from test_batch)),
+  100,
+  'recommendation batches are capped at Top 100'
+);
+select is(
+  (select formula_version from public.recommendation_batches where id = (select id from test_batch)),
+  'storyverse-recommendation-v1',
+  'recommendation batches preserve the formula version'
+);
+select is(
+  (select story_id from public.recommendation_results where batch_id = (select id from test_batch) and rank = 1),
+  '30000000-0000-0000-0000-000000000001'::uuid,
+  'fixed inputs produce the expected first-ranked story'
+);
+select is(
+  (select semantic_score from public.recommendation_results where batch_id = (select id from test_batch) and rank = 1),
+  1::double precision,
+  'identical content vectors produce semantic score 1'
+);
+select ok(
+  (select bool_and(final_score >= lead_score) from (
+    select final_score, lead(final_score) over (order by rank) as lead_score
+    from public.recommendation_results where batch_id = (select id from test_batch)
+  ) scores where lead_score is not null),
+  'recommendation rows are deterministically sorted by descending score'
+);
+select is(
+  (select count(*)::integer from public.recommendation_results result
+    join public.stories story on story.id = result.story_id
+    where result.batch_id = (select id from test_batch) and story.user_id = '00000000-0000-0000-0000-000000000999'),
+  0,
+  'a user never recommends their own story'
+);
+
+create temporary table first_image_claim as
+select public.claim_story_image_generation(
+  '10000000-0000-0000-0000-000000000000',
+  '00000000-0000-0000-0000-000000000999',
+  'clay-3d',
+  'test prompt',
+  '{"title":"test"}'::jsonb,
+  'test-image-model',
+  'reference-hash'
+) as result;
+
+select is(
+  (select result ->> 'outcome' from first_image_claim),
+  'claimed',
+  'the first image request claims the only image slot'
+);
+select is(
+  (public.claim_story_image_generation(
+    '10000000-0000-0000-0000-000000000000',
+    '00000000-0000-0000-0000-000000000999',
+    'clay-3d', 'test prompt', '{}'::jsonb, 'test-image-model', 'reference-hash'
+  ) ->> 'outcome'),
+  'generating',
+  'a concurrent image request does not claim a second generation'
+);
+
+update public.generated_images
+set status = 'ready', public_url = 'https://example.invalid/image.png', storage_path = 'test/image.png'
+where story_id = '10000000-0000-0000-0000-000000000000';
+
+select is(
+  (public.claim_story_image_generation(
+    '10000000-0000-0000-0000-000000000000',
+    '00000000-0000-0000-0000-000000000999',
+    'retro-collage', 'different prompt', '{}'::jsonb, 'test-image-model', 'reference-hash'
+  ) ->> 'outcome'),
+  'ready',
+  'a later style request reuses the already selected image'
+);
+select is(
+  (select count(*)::integer from public.generated_images
+    where story_id = '10000000-0000-0000-0000-000000000000'),
+  1,
+  'repeated image requests leave exactly one generated image row'
+);
+select throws_ok(
+  $$insert into public.generated_images (
+      story_id, user_id, style, status, prompt, model, model_version, source_content_hash
+    ) values (
+      '10000000-0000-0000-0000-000000000000',
+      '00000000-0000-0000-0000-000000000999',
+      'indie-zine', 'failed', 'duplicate', 'test', 'test', 'reference-hash'
+    )$$,
+  '23505',
+  'duplicate key value violates unique constraint "generated_images_one_per_story_idx"',
+  'a second image row is rejected even outside the Edge Function'
+);
+
+update public.generated_images
+set status = 'failed', storage_path = null, public_url = null
+where story_id = '10000000-0000-0000-0000-000000000000';
+insert into public.image_generation_attempts (story_id, user_id, style, status)
+select
+  '10000000-0000-0000-0000-000000000000',
+  '00000000-0000-0000-0000-000000000999',
+  'clay-3d',
+  'failed'
+from generate_series(1, 4);
+select is(
+  (public.claim_story_image_generation(
+    '10000000-0000-0000-0000-000000000000',
+    '00000000-0000-0000-0000-000000000999',
+    'clay-3d', 'test prompt', '{}'::jsonb, 'test-image-model', 'reference-hash'
+  ) ->> 'outcome'),
+  'rate_limited',
+  'five attempts within an hour enforce the account rate limit'
+);
+select is(
+  (select count(*)::integer from public.image_generation_attempts
+    where user_id = '00000000-0000-0000-0000-000000000999'),
+  5,
+  'a rejected sixth request does not add another attempt row'
+);
+
+set local role authenticated;
+select is(
+  (select count(*)::integer from public.stories
+    where user_id in (
+      '00000000-0000-0000-0000-000000000997'::uuid,
+      '00000000-0000-0000-0000-000000000998'::uuid,
+      '00000000-0000-0000-0000-000000000999'::uuid
+    )),
+  102,
+  'RLS exposes published fixture stories and the current user own fixture story only'
+);
+select throws_ok(
+  $$update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-000000000999'$$,
+  '42501',
+  'permission denied for table profiles',
+  'ordinary users cannot promote themselves to admin'
+);
+reset role;
+
+update public.profiles set status = 'suspended' where id = '00000000-0000-0000-0000-000000000997';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000997', true);
+set local role authenticated;
+select is(
+  (select count(*)::integer from public.stories where id = '20000000-0000-0000-0000-000000000000'),
+  0,
+  'a suspended account cannot read its private story through RLS'
+);
+reset role;
+
+select has_table('public', 'analytics_events', 'analytics_events table exists');
+select has_table('public', 'analytics_rate_limits', 'anonymous rate-limit table exists');
+select col_is_pk('public', 'analytics_events', 'event_id', 'event_id is the idempotency key');
+select col_not_null('public', 'analytics_events', 'participant_key', 'participant key is required');
+select col_not_null('public', 'analytics_events', 'properties', 'event properties are required');
+select has_function('public', 'check_analytics_rate_limit', array['text', 'integer', 'integer'], 'rate-limit function exists');
+select has_function(
+  'public',
+  'analytics_dashboard',
+  array['timestamp with time zone', 'timestamp with time zone', 'uuid', 'text', 'text'],
+  'filtered research dashboard function exists'
+);
+select policies_are(
+  'public',
+  'analytics_events',
+  array['analytics_events_admin_read'],
+  'only administrators receive a direct read policy'
+);
+
+insert into public.analytics_events (
+  event_id, event_name, priority, occurred_at, user_id, participant_key, anonymous_id,
+  session_id, page_view_id, page_id, route, language, theme, device_type,
+  browser, os, app_version, environment, properties
+) values
+  (
+    '40000000-0000-0000-0000-000000000001', 'home_viewed', 'P1', now(),
+    '00000000-0000-0000-0000-000000000999', repeat('a', 64),
+    '41000000-0000-0000-0000-000000000001', '42000000-0000-0000-0000-000000000001',
+    '43000000-0000-0000-0000-000000000001', 'home_intro', '/', 'zh', 'day', 'desktop',
+    'test', 'test', 'test', 'test', '{}'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000002', 'story_input_snapshot', 'P0', now(),
+    '00000000-0000-0000-0000-000000000999', repeat('a', 64),
+    '41000000-0000-0000-0000-000000000001', '42000000-0000-0000-0000-000000000001',
+    '43000000-0000-0000-0000-000000000002', 'story_write', '/StoryWrite', 'zh', 'day', 'desktop',
+    'test', 'test', 'test', 'test', '{"was_pasted":true,"title_active_ms":1000,"body_active_ms":2000}'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000003', 'star_clicked', 'P0', now(),
+    '00000000-0000-0000-0000-000000000999', repeat('a', 64),
+    '41000000-0000-0000-0000-000000000001', '42000000-0000-0000-0000-000000000001',
+    '43000000-0000-0000-0000-000000000003', 'star_lobby', '/StarLobby', 'zh', 'day', 'desktop',
+    'test', 'test', 'test', 'test', '{}'
+  ),
+  (
+    '40000000-0000-0000-0000-000000000004', 'story_read_ended', 'P0', now(),
+    '00000000-0000-0000-0000-000000000998', repeat('b', 64),
+    '41000000-0000-0000-0000-000000000002', '42000000-0000-0000-0000-000000000002',
+    '43000000-0000-0000-0000-000000000004', 'star_lobby', '/StarLobby', 'zh', 'day', 'desktop',
+    'test', 'test', 'test', 'test', '{"meaningful_read":true,"is_own_story":false,"active_duration_ms":21000}'
+  );
+
+select is(
+  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', null, null, null) #>> '{overview,participants}')::integer,
+  2,
+  'research dashboard counts distinct participants'
+);
+select is(
+  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', '00000000-0000-0000-0000-000000000999', null, null) #>> '{overview,events}')::integer,
+  3,
+  'account filter returns only the selected account events'
+);
+select is(
+  public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', '00000000-0000-0000-0000-000000000999', null, null) #>> '{selected_account,username}',
+  'reference_user',
+  'account drill-down exposes the human login account'
+);
+select is(
+  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', null, 'P1', null) #>> '{overview,events}')::integer,
+  1,
+  'priority filter is applied to every dashboard section'
+);
+select is(
+  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', null, null, 'discovery') #>> '{overview,events}')::integer,
+  1,
+  'behaviour module filter is applied'
+);
+select is(
+  (public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', '00000000-0000-0000-0000-000000000999', 'P0', 'creation') #>> '{overview,events}')::integer,
+  1,
+  'account, priority and module filters compose correctly'
+);
+select is(
+  jsonb_array_length(public.analytics_dashboard(now() - interval '1 day', now() + interval '1 minute', null, null, null) -> 'accounts'),
+  2,
+  'active account ranking includes both fixture accounts'
+);
+select is(
+  public.analytics_event_module('story_input_snapshot'),
+  'creation',
+  'event names map to a stable research module'
+);
+
+select * from finish();
+rollback;

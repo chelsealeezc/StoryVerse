@@ -1,0 +1,662 @@
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { dataService } from "../services/data-service";
+import { initialState, loadState, saveState } from "../lib/app-state-storage";
+import { clearRecoveryDraft, loadRecoveryDraft, saveRecoveryDraft } from "../lib/draft-recovery";
+import { setAnalyticsPage, track, updateAnalyticsContext } from "../lib/analytics";
+import {
+  authenticatedEntryScreen,
+  externalPath,
+  guardBlankEditorAfterSubmission,
+  guardPostPublishScreenForFirstStory,
+  normalizedPath,
+  pathFromState,
+  routePatchFromPath,
+  shouldAutosaveDraft,
+  storyEditorStepForProgress,
+} from "./routes";
+import { Gateway } from "../features/gateway/Gateway";
+import type { AppState, StoryDraft, Story, TourSceneId, UserProfile } from "../types/domain";
+import type { AppUpdate, AuthMode, GatewayAuthInput, GatewaySection, ThemeMode } from "../types/ui";
+import "../features/tour/tour.css";
+
+const StoryEditor = lazy(() =>
+  import("../features/story-editor/StoryEditor").then((module) => ({ default: module.StoryEditor })),
+);
+const ResonancePage = lazy(() =>
+  import("../features/resonance/ResonancePage").then((module) => ({ default: module.ResonancePage })),
+);
+const RecommendationsPage = lazy(() =>
+  import("../features/recommendations/RecommendationsPage").then((module) => ({
+    default: module.RecommendationsPage,
+  })),
+);
+const StarLobby = lazy(() =>
+  import("../features/star-lobby/StarLobby").then((module) => ({ default: module.StarLobby })),
+);
+const AdminConsole = lazy(() =>
+  import("../features/admin/AdminConsole").then((module) => ({ default: module.AdminConsole })),
+);
+const AdminGate = lazy(() => import("../features/admin/AdminGate").then((module) => ({ default: module.AdminGate })));
+
+function PageLoadingFallback({ themeMode, language }: { themeMode: ThemeMode; language: AppState["language"] }) {
+  return (
+    <main className={`page-loading-fallback theme-${themeMode}`} role="status" aria-live="polite">
+      <span aria-hidden="true">✦</span>
+      <p>StoryVerse</p>
+      <small>{language === "zh" ? "正在打开页面…" : "Opening page…"}</small>
+    </main>
+  );
+}
+
+async function loadRecoverableStory(userId: string, storedScopeId: string, storedStoryId: string | undefined) {
+  const activeProgress = await dataService.getStoryProgress();
+  if (activeProgress) return activeProgress;
+  if (!storedStoryId || storedScopeId !== userId) return null;
+  return dataService.getStoryProgress(storedStoryId);
+}
+
+export default function App() {
+  const initialRoute = typeof window !== "undefined" ? routePatchFromPath() : {};
+  const [state, setState] = useState<AppState>(() => {
+    const loaded = { ...loadState(), ...initialRoute };
+    /*
+     * 加 ?tour=1 可以把新手引导重新打开一次，方便演示和回归验证。
+     * 引导一旦看完或跳过就永久关闭，否则想再看一遍只能去清 localStorage。
+     */
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("tour")) {
+      return { ...loaded, tour: { enabled: true, seen: [] } };
+    }
+    return loaded;
+  });
+  const [gatewaySection, setGatewaySection] = useState<GatewaySection>(() => initialRoute.gatewaySection ?? "intro");
+  const [authMode, setAuthMode] = useState<AuthMode>(() => initialRoute.authMode ?? "signup");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("day");
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [localStories, setLocalStories] = useState<Story[]>([]);
+  const [ownedStoryIds, setOwnedStoryIds] = useState<string[]>([]);
+  const lastPathRef = useRef<string>(typeof window !== "undefined" ? normalizedPath() : "/");
+  const poppingRef = useRef(false);
+  const analyticsPageRef = useRef("");
+  const update: AppUpdate = (patch) =>
+    setState((previous) => ({ ...previous, ...(typeof patch === "function" ? patch(previous) : patch) }));
+  const changeLanguage = (language: AppState["language"]) => {
+    if (language === state.language) return;
+    track("language_changed", { previous_language: state.language, language });
+    updateAnalyticsContext({ language });
+    update({ language });
+  };
+  const changeThemeMode = (nextTheme: ThemeMode) => {
+    if (nextTheme === themeMode) return;
+    track("theme_changed", { previous_theme: themeMode, theme: nextTheme });
+    updateAnalyticsContext({ theme: nextTheme });
+    setThemeMode(nextTheme);
+  };
+  useEffect(() => saveState(state), [state]);
+  const analyticsPageId =
+    state.screen === "intro"
+      ? `home_${gatewaySection}`
+      : state.screen === "storyEditor"
+        ? (["icebreaker", "story_write", "story_analyzing", "story_confirmation"][state.storyEditorStep] ??
+          "story_editor")
+        : state.screen === "starLobby"
+          ? "star_lobby"
+          : state.screen;
+  useEffect(() => {
+    updateAnalyticsContext({ language: state.language, theme: themeMode, role: user?.role ?? null });
+  }, [state.language, themeMode, user?.role]);
+  useEffect(() => {
+    if (!analyticsPageId.startsWith("home_") && (!sessionChecked || !user)) return;
+    if (analyticsPageRef.current === analyticsPageId) return;
+    analyticsPageRef.current = analyticsPageId;
+    setAnalyticsPage(analyticsPageId, { language: state.language, theme: themeMode, role: user?.role ?? null });
+    if (analyticsPageId === "home_intro") track("home_viewed", { gateway_section: gatewaySection });
+    else if (analyticsPageId === "icebreaker") track("icebreaker_viewed");
+    else if (analyticsPageId === "story_write") track("story_write_viewed", { draft_id: state.draft.id ?? null });
+    else if (analyticsPageId === "story_confirmation")
+      track("story_confirmation_viewed", { story_id: state.analysis?.id ?? null });
+    else if (analyticsPageId === "resonance") track("resonance_page_viewed");
+    else if (analyticsPageId === "recommendations") track("recommendation_page_viewed");
+  }, [analyticsPageId, sessionChecked, user?.id]);
+  useEffect(() => {
+    let active = true;
+    dataService
+      .getCurrentUser()
+      .then(async ({ user: currentUser }) => {
+        if (!active) return;
+        setUser(currentUser);
+        const [savedDraft, storyProgress, resonance, storyList, ownedStories, inbox, reactions] = await Promise.all([
+          dataService.getCurrentDraft(),
+          loadRecoverableStory(currentUser.id, state.accountScopeId, state.analysis?.id),
+          dataService.getResonancePreferences(),
+          dataService.listLobbyStories().then((items) => items.map((item) => item.story)),
+          dataService.listOwnedStories(),
+          dataService.listNotifications(),
+          dataService.listReactions(),
+        ]);
+        if (!active) return;
+        setLocalStories(storyList);
+        setOwnedStoryIds(ownedStories.map((story) => story.id));
+        const hasSubmittedStory = ownedStories.some(
+          (story) => story.status !== "draft" && story.status !== "analyzing" && story.status !== "needs_confirmation",
+        );
+        update((previous) => {
+          const progressStep = storyProgress ? storyEditorStepForProgress(storyProgress.status) : null;
+          const shouldOpenProgress =
+            progressStep !== null && !(storyProgress?.status === "pending_review" && previous.screen === "starLobby");
+          const firstStoryGuardedScreen = guardPostPublishScreenForFirstStory(previous.screen, hasSubmittedStory);
+          const screen = shouldOpenProgress
+            ? "storyEditor"
+            : guardBlankEditorAfterSubmission({
+                screen: firstStoryGuardedScreen,
+                hasSubmittedStory,
+                hasDraftContent: Boolean(savedDraft?.title.trim() || savedDraft?.body.trim()),
+                hasStoryProgress: Boolean(storyProgress),
+              });
+          const wasRedirectedToFirstStory = screen !== previous.screen && screen === "storyEditor";
+          return {
+            screen,
+            accountScopeId: currentUser.id,
+            hasCompletedFirstStory: hasSubmittedStory,
+            ...(storyProgress
+              ? {
+                  draft: { ...initialState.draft, ...storyProgress.draft },
+                  analysis: storyProgress.analysis,
+                  ...(progressStep !== null ? { storyEditorStep: progressStep } : {}),
+                }
+              : savedDraft
+                ? { draft: { ...initialState.draft, ...savedDraft } }
+                : {
+                    draft: { ...initialState.draft, startedAt: Date.now() },
+                    analysis: null,
+                    ...(wasRedirectedToFirstStory ? { storyEditorStep: 0 as const } : {}),
+                  }),
+            resonance,
+            inbox,
+            reactions,
+            isAdmin: currentUser.role === "admin",
+          };
+        });
+        setSessionChecked(true);
+      })
+      .catch(async () => {
+        const recovery = await loadRecoveryDraft().catch(() => undefined);
+        if (!active) return;
+        update((previous) => ({
+          ...(recovery?.body.trim() ? { draft: { ...initialState.draft, ...recovery } } : {}),
+          ...(["resonance", "recommendations", "starLobby"].includes(previous.screen)
+            ? { screen: "intro" as const }
+            : {}),
+        }));
+        setSessionChecked(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const draftContentKey = [
+    state.draft.guide,
+    state.draft.customGuide,
+    state.draft.title,
+    state.draft.body,
+    state.draft.mood,
+    state.draft.stage,
+    state.draft.age,
+    state.draft.gender,
+    state.draft.city,
+    state.draft.cityNameEn,
+    state.draft.cityCountry,
+    state.draft.cityLat,
+    state.draft.cityLon,
+    state.draft.people.join("|"),
+  ].join("\u0000");
+  useEffect(() => {
+    if (!shouldAutosaveDraft(state.screen, state.storyEditorStep)) return;
+    if (!state.draft.title.trim() && !state.draft.body.trim()) return;
+    void saveRecoveryDraft(state.draft);
+    if (!user) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      dataService
+        .saveDraft(state.draft)
+        .then((saved) => {
+          if (cancelled) return;
+          update((previous) => ({
+            draft: {
+              ...previous.draft,
+              id: saved.id,
+              version: saved.version,
+              savedAt: saved.savedAt,
+              saves: saved.saves,
+            },
+          }));
+          track("story_autosaved", {
+            draft_id: saved.id,
+            version: saved.version,
+            save_count: saved.saves,
+            success: true,
+          });
+          void clearRecoveryDraft();
+        })
+        .catch(() => track("story_autosaved", { draft_id: state.draft.id ?? null, success: false }));
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [draftContentKey, user?.id, state.screen, state.storyEditorStep]);
+  useEffect(() => {
+    const onPop = () => {
+      const route = routePatchFromPath();
+      poppingRef.current = true;
+      if (route.gatewaySection) setGatewaySection(route.gatewaySection);
+      if (route.authMode) setAuthMode(route.authMode);
+      const { gatewaySection: _gatewaySection, authMode: _authMode, ...statePatch } = route;
+      update(statePatch);
+      lastPathRef.current = normalizedPath();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  useEffect(() => {
+    const path = pathFromState(state);
+    if (path === lastPathRef.current) {
+      poppingRef.current = false;
+      return;
+    }
+    const method = poppingRef.current ? "replaceState" : "pushState";
+    window.history[method]({}, "", externalPath(path));
+    lastPathRef.current = path;
+    poppingRef.current = false;
+  }, [state.screen, state.storyEditorStep, gatewaySection, authMode]);
+  const goHome = () => {
+    setGatewaySection("intro");
+    update({ screen: "intro" });
+  };
+  useEffect(() => {
+    if (!sessionChecked) return;
+    const firstStoryGuardedScreen = guardPostPublishScreenForFirstStory(state.screen, state.hasCompletedFirstStory);
+    const guardedScreen = guardBlankEditorAfterSubmission({
+      screen: firstStoryGuardedScreen,
+      hasSubmittedStory: state.hasCompletedFirstStory,
+      hasDraftContent: Boolean(state.draft.title.trim() || state.draft.body.trim()),
+      hasStoryProgress: Boolean(state.analysis),
+    });
+    if (guardedScreen === state.screen) return;
+    update({ screen: user ? guardedScreen : "intro" });
+  }, [
+    sessionChecked,
+    state.screen,
+    user?.id,
+    state.hasCompletedFirstStory,
+    state.draft.title,
+    state.draft.body,
+    state.analysis?.id,
+  ]);
+  const enterStarLobby = () => {
+    if (!user) {
+      goHome();
+      return;
+    }
+    if (!state.hasCompletedFirstStory) {
+      update({ screen: "storyEditor" });
+      return;
+    }
+    update({ screen: "starLobby" });
+    void dataService
+      .refreshRecommendations()
+      .then(() => dataService.listLobbyStories())
+      .then((items) => setLocalStories(items.map((item) => item.story)))
+      .catch((error) => console.info("[StoryVerse] Recommendations could not be refreshed.", error));
+  };
+  const continueAfterPendingReview = async (storyId: string) => {
+    setOwnedStoryIds((previous) => (previous.includes(storyId) ? previous : [storyId, ...previous]));
+    const [inbox, lobbyStories] = await Promise.all([
+      dataService.listNotifications().catch(() => state.inbox),
+      dataService.listLobbyStories().catch(() => null),
+    ]);
+    if (lobbyStories) setLocalStories(lobbyStories.map((item) => item.story));
+    await clearRecoveryDraft().catch(() => undefined);
+    update({
+      hasCompletedFirstStory: true,
+      screen: "starLobby",
+      inbox,
+    });
+    track("pending_review_lobby_entered", { story_id: storyId });
+    track("story_submit_result", { story_id: storyId, success: true, status: "pending_review" });
+  };
+  const publishStory = async (draft: StoryDraft, analysis: NonNullable<AppState["analysis"]>) => {
+    const result = await dataService.publishStory(draft, analysis);
+    if (result.requiresConfirmation && result.analysis) {
+      update({ analysis: result.analysis, storyEditorStep: 3 });
+      track("story_submit_result", {
+        story_id: result.analysis.id ?? analysis.id,
+        success: true,
+        status: "needs_confirmation",
+      });
+      return;
+    }
+    const story = result.story;
+    if (result.status === "pending_review") {
+      setOwnedStoryIds((previous) => (previous.includes(story.id) ? previous : [story.id, ...previous]));
+      const inbox = await dataService.listNotifications().catch(() => state.inbox);
+      await clearRecoveryDraft().catch(() => undefined);
+      update({
+        hasCompletedFirstStory: true,
+        screen: "storyEditor",
+        storyEditorStep: 3,
+        analysis: {
+          ...analysis,
+          id: story.id,
+          workflowStatus: "pending_review",
+          moderationDecision: "human_review",
+        },
+        inbox,
+      });
+      track("story_submit_result", { story_id: story.id, success: true, status: result.status });
+      return;
+    }
+    if (result.status === "published") setLocalStories((previous) => [story, ...previous]);
+    setOwnedStoryIds((previous) => [story.id, ...previous]);
+    const inbox = await dataService.listNotifications().catch(() => state.inbox);
+    await clearRecoveryDraft().catch(() => undefined);
+    update({
+      hasCompletedFirstStory: true,
+      screen: "resonance",
+      analysis: { ...analysis, id: story.id, workflowStatus: result.status },
+      inbox,
+    });
+    track("story_submit_result", { story_id: story.id, success: true, status: result.status });
+  };
+  const completeAuth = async (input: GatewayAuthInput) => {
+    let result: { user: UserProfile };
+    let savedDraft: Awaited<ReturnType<typeof dataService.getCurrentDraft>> = null;
+    let storyProgress: Awaited<ReturnType<typeof dataService.getStoryProgress>> = null;
+    let resonance: AppState["resonance"] = state.resonance;
+    let storyList: Story[] = [];
+    let ownedStories: Story[] = [];
+    let inbox: AppState["inbox"] = [];
+    let reactions: AppState["reactions"] = {};
+
+    track("auth_attempted", { mode: input.mode, account_length: input.accountIdentifier.trim().length });
+    try {
+      result =
+        input.mode === "signup"
+          ? await dataService.register({
+              accountIdentifier: input.accountIdentifier,
+              password: input.password,
+              passwordConfirmation: input.passwordConfirmation,
+              displayName: input.displayName,
+              securityQuestion: input.securityQuestion,
+              securityAnswer: input.securityAnswer,
+            })
+          : await dataService.login({ accountIdentifier: input.accountIdentifier, password: input.password });
+    } catch (error) {
+      track("auth_result", {
+        mode: input.mode,
+        success: false,
+        error_code: error instanceof Error && "code" in error ? String(error.code) : "UNKNOWN",
+      });
+      throw error;
+    }
+    const signup = input.mode === "signup";
+    [savedDraft, storyProgress, resonance, storyList, ownedStories, inbox, reactions] = await Promise.all([
+      dataService.getCurrentDraft(),
+      loadRecoverableStory(result.user.id, signup ? "" : state.accountScopeId, signup ? undefined : state.analysis?.id),
+      dataService.getResonancePreferences(),
+      dataService.listLobbyStories().then((items) => items.map((item) => item.story)),
+      dataService.listOwnedStories(),
+      dataService.listNotifications(),
+      dataService.listReactions(),
+    ]);
+
+    setUser(result.user);
+    updateAnalyticsContext({ role: result.user.role });
+    track("auth_result", { mode: input.mode, success: true });
+    setSessionChecked(true);
+    setLocalStories(storyList);
+    setOwnedStoryIds(ownedStories.map((story) => story.id));
+    /*
+     * 注册 ＝ 全新账号：重开新手引导，并强制回到第一步。
+     * 不重置的话，浏览器里残留的 tour.enabled=false / hasCompletedFirstStory=true
+     * 会让新注册的人看不到引导、或者直接掉进星空大厅 —— 而大厅按设计是最后一站。
+     * 登录保持原逻辑（有本地草稿就续写）。
+     */
+    const hasSubmittedStory = ownedStories.some(
+      (story) => story.status !== "draft" && story.status !== "analyzing" && story.status !== "needs_confirmation",
+    );
+    const progressStep = storyProgress ? storyEditorStepForProgress(storyProgress.status) : null;
+    const screen =
+      progressStep !== null
+        ? "storyEditor"
+        : authenticatedEntryScreen({
+            isSignup: signup,
+            hasSavedDraft: Boolean(savedDraft),
+            hasPublishedStory: hasSubmittedStory,
+          });
+    const startsBlankFirstStory = screen === "storyEditor" && !savedDraft;
+    update({
+      screen,
+      accountScopeId: result.user.id,
+      hasCompletedFirstStory: hasSubmittedStory,
+      ...(storyProgress
+        ? {
+            draft: { ...initialState.draft, ...storyProgress.draft },
+            analysis: storyProgress.analysis,
+            ...(progressStep !== null ? { storyEditorStep: progressStep } : {}),
+          }
+        : savedDraft
+          ? { draft: { ...initialState.draft, ...savedDraft } }
+          : {
+              draft: { ...initialState.draft, startedAt: Date.now() },
+              analysis: null,
+              ...(startsBlankFirstStory ? { storyEditorStep: 0 as const } : {}),
+            }),
+      ...(signup ? { tour: { enabled: true, seen: [] }, analysis: null, storyEditorStep: 0 } : {}),
+      resonance,
+      inbox,
+      reactions,
+      isAdmin: result.user.role === "admin",
+    });
+  };
+
+  /*
+   * 新手引导的调度。每个场景只在「引导还开着」且「这个场景没播过」时出现，
+   * 所以用户往回退一步不会被同一段引导再拦一次。
+   *
+   * 「跳过本页」只把当前场景标记成看过，后面的页面照常播 —— 在第一步嫌啰嗦
+   * 而跳过，不该连带失去后面所有页面的引导。整条引导只在走完最后一站
+   * （星空大厅）时才真正关闭。
+   */
+  const tourSeen = (scene: TourSceneId) => state.tour.seen.includes(scene);
+  const tourActive = (scene: TourSceneId) => state.tour.enabled && !tourSeen(scene);
+  const markSeen = (previous: AppState, scene: TourSceneId, done: boolean) => ({
+    tour: {
+      enabled: done ? false : previous.tour.enabled,
+      seen: previous.tour.seen.includes(scene) ? previous.tour.seen : [...previous.tour.seen, scene],
+    },
+  });
+  // 大厅是流程的最后一站，走完＝整条引导结束
+  const finishTour = (scene: TourSceneId) => update((previous) => markSeen(previous, scene, scene === "starLobby"));
+  const skipTour = (scene: TourSceneId) => update((previous) => markSeen(previous, scene, false));
+
+  let content: ReactNode;
+  if (!sessionChecked && state.screen !== "intro") {
+    content = <PageLoadingFallback themeMode={themeMode} language={state.language} />;
+  } else if (state.screen === "admin") {
+    content =
+      state.isAdmin && user?.role === "admin" ? (
+        <AdminConsole
+          language={state.language}
+          themeMode={themeMode}
+          onLogout={() => {
+            void dataService.logout().finally(() => {
+              setUser(null);
+              update({
+                isAdmin: false,
+                inbox: [],
+                reactions: {},
+                accountScopeId: "",
+                draft: { ...initialState.draft, startedAt: Date.now() },
+                analysis: null,
+              });
+            });
+          }}
+          onLanguageChange={changeLanguage}
+          onThemeModeChange={changeThemeMode}
+        />
+      ) : (
+        <AdminGate
+          language={state.language}
+          themeMode={themeMode}
+          onBack={() => update({ screen: "intro" })}
+          onSignedIn={() => {
+            void dataService.getCurrentUser().then(({ user: adminUser }) => {
+              setUser(adminUser);
+              update({ isAdmin: adminUser.role === "admin" });
+            });
+          }}
+          onThemeModeChange={setThemeMode}
+        />
+      );
+  } else if (state.screen === "intro") {
+    content = (
+      <Gateway
+        language={state.language}
+        onLanguageChange={changeLanguage}
+        onHome={goHome}
+        onComplete={completeAuth}
+        section={gatewaySection}
+        authMode={authMode}
+        onAuthModeChange={setAuthMode}
+        onSectionChange={setGatewaySection}
+        themeMode={themeMode}
+        onThemeModeChange={changeThemeMode}
+      />
+    );
+  } else if (state.screen === "storyEditor")
+    content = (
+      <StoryEditor
+        state={state}
+        update={update}
+        onPublished={publishStory}
+        onPendingReview={continueAfterPendingReview}
+        onHome={goHome}
+        themeMode={themeMode}
+        onThemeModeChange={changeThemeMode}
+        tourActive={tourActive}
+        onTourFinish={finishTour}
+        onTourSkip={skipTour}
+      />
+    );
+  else if (state.screen === "resonance")
+    content = (
+      <ResonancePage
+        state={state}
+        update={update}
+        onBack={() => update({ screen: "storyEditor", storyEditorStep: 3 })}
+        onContinue={() => {
+          void dataService
+            .saveResonancePreferences(state.resonance)
+            .catch((error) => console.info("[StoryVerse] Resonance could not be saved.", error));
+          enterStarLobby();
+        }}
+        onHome={goHome}
+        themeMode={themeMode}
+        onThemeModeChange={changeThemeMode}
+        tourActive={tourActive}
+        onTourFinish={finishTour}
+        onTourSkip={skipTour}
+      />
+    );
+  else if (state.screen === "recommendations")
+    content = (
+      <RecommendationsPage
+        state={state}
+        update={update}
+        onEnterStarLobby={enterStarLobby}
+        onHome={goHome}
+        themeMode={themeMode}
+        onThemeModeChange={changeThemeMode}
+      />
+    );
+  else
+    content = (
+      <StarLobby
+        language={state.language}
+        themeMode={themeMode}
+        onLanguageChange={changeLanguage}
+        onThemeModeChange={changeThemeMode}
+        onHome={goHome}
+        onLogout={() => {
+          void dataService.logout().finally(() => {
+            setUser(null);
+            setSessionChecked(true);
+            setLocalStories([]);
+            setOwnedStoryIds([]);
+            setGatewaySection("intro");
+            update({
+              screen: "intro",
+              inbox: [],
+              reactions: {},
+              isAdmin: false,
+              accountScopeId: "",
+              hasCompletedFirstStory: false,
+              draft: { ...initialState.draft, startedAt: Date.now() },
+              analysis: null,
+            });
+          });
+        }}
+        resonance={state.resonance}
+        onResonanceChange={async (resonance) => {
+          await dataService.saveResonancePreferences(resonance);
+          await dataService.refreshRecommendations();
+          const items = await dataService.listLobbyStories();
+          setLocalStories(items.map((item) => item.story));
+          update({ resonance });
+          return {
+            batchId: items.find((item) => item.story.recommendationBatchId)?.story.recommendationBatchId,
+            storyCount: items.length,
+          };
+        }}
+        stories={localStories}
+        ownedStoryIds={ownedStoryIds}
+        reactions={state.reactions}
+        onReactionChange={async (storyId, reaction) => {
+          const previousReaction = state.reactions[storyId] ?? null;
+          update((previous) => ({ reactions: { ...previous.reactions, [storyId]: reaction } }));
+          try {
+            await (reaction ? dataService.setReaction(storyId, reaction) : dataService.clearReaction(storyId));
+            track("story_reaction_result", { story_id: storyId, reaction, success: true, source: "star_lobby" });
+          } catch (error) {
+            update((previous) => ({ reactions: { ...previous.reactions, [storyId]: previousReaction } }));
+            track("story_reaction_result", {
+              story_id: storyId,
+              reaction,
+              success: false,
+              source: "star_lobby",
+              error_code: error instanceof Error && "code" in error ? String(error.code) : "UNKNOWN",
+            });
+            throw error;
+          }
+        }}
+        onReportStory={(storyId, reason, note) => {
+          return dataService.createReport(storyId, reason, note).then(() => undefined);
+        }}
+        showTour={tourActive("starLobby")}
+        onTourFinish={() => finishTour("starLobby")}
+        onTourSkip={() => skipTour("starLobby")}
+        removedStoryIds={[]}
+        inbox={state.inbox}
+        onMarkInboxRead={() => {
+          void dataService.markNotificationsRead();
+          update((previous) => ({ inbox: previous.inbox.map((m) => ({ ...m, read: true })) }));
+        }}
+      />
+    );
+
+  return (
+    <Suspense fallback={<PageLoadingFallback themeMode={themeMode} language={state.language} />}>{content}</Suspense>
+  );
+}

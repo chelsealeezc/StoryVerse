@@ -1,0 +1,136 @@
+import type { StoryDraft } from "../types/domain";
+
+export const guides = [
+  {
+    id: "agency",
+    icon: "↗",
+    construct: "自主能动性",
+    title: "重新拿回选择",
+    shortTitle: "命运",
+    en: "Choosing Again",
+    enShort: "Agency",
+    prompt: "有没有一次经历，让你意识到自己仍然可以做出选择？当时发生了什么？",
+    enPrompt: "Was there an experience that reminded you that you could still make a choice? What happened?",
+    examples:
+      "有段时间，学业、工作和生活同时带来压力。我没办法控制所有事情，但从一个很小的决定开始，慢慢找回了自己的节奏。",
+    enExamples:
+      "There was a time when school, work, and life pressed on me all at once. I could not control everything, but one small decision helped me slowly find my rhythm again.",
+    definition:
+      "叙事主角改变自身命运、影响周遭他人环境的能力，常体现为自我掌控、自我赋权、成就、社会地位；高自主叙事突出个人成就、掌控人生走向。",
+  },
+  {
+    id: "communion",
+    icon: "♥",
+    construct: "社群联结性",
+    title: "那些连接我的人和事",
+    shortTitle: "联结",
+    en: "What Connects Me",
+    enShort: "Bond",
+    prompt: "有没有一个瞬间，因为某位陌生人、一位朋友、一只动物或其他陪伴，让你重新感到自己与世界有所连接？",
+    enPrompt:
+      "Was there a moment when a stranger, friend, animal, or another kind of companion helped you feel connected to the world again?",
+    examples:
+      "我很喜欢变魔术，那天我在社团意外认识了一群魔术同好者，大家在一起交流着共同热爱的事，我真切感受到无条件的爱与温暖。",
+    enExamples:
+      "I love magic. One day in a club, I unexpectedly met a group of people who loved it too. Sharing that passion made me feel unconditional warmth.",
+    definition: "主角通过爱、友谊、沟通、集体归属建立人际联结，叙事核心是亲密、关怀、归属感。",
+  },
+  {
+    id: "redemption",
+    icon: "◷",
+    construct: "救赎叙事",
+    title: "走过以后",
+    shortTitle: "救赎",
+    en: "After Going Through It",
+    enShort: "Relief",
+    prompt: "有没有一段曾经非常难熬、而如今你的看法已经有所变化的经历？",
+    enPrompt: "Was there an experience that once felt unbearable but looks different to you now?",
+    examples:
+      "我在公司干了五年突然被裁。当时觉得天塌了，失眠整整一个月。结果不久之后，之前一直想创业但没敢动手的前同事找我合伙，现在比上班赚了三倍。",
+    enExamples:
+      "After five years at a company, I was suddenly laid off. I could not sleep for a month. Later, a former colleague asked me to start a business together — now I earn three times more than before.",
+    definition: "明确消极、痛苦的事件，最终导向积极、正向结果；前期负面经历被后续美好体验“救赎”。",
+  },
+  {
+    id: "contamination",
+    icon: "◎",
+    construct: "污损叙事",
+    title: "意外的转折",
+    shortTitle: "苦痛",
+    en: "An Unexpected Turn",
+    enShort: "Irony",
+    prompt: "有没有一件原本让你期待或高兴的事，后来却出现了意想不到的转折？",
+    enPrompt: "Was there something you once welcomed or looked forward to that later took an unexpected turn?",
+    examples: "本来升职我特别开心，后来才知道这次晋升是以我的好友被辞退为代价换来的。",
+    enExamples:
+      "I was thrilled about my promotion, until I learned it came at the cost of my close friend being laid off.",
+    definition: "原本积极美好的事件急转直下，负面情绪彻底覆盖、消解之前所有正向体验。",
+  },
+  {
+    id: "exploration",
+    icon: "✦",
+    construct: "探索型叙事",
+    title: "和自己对话",
+    shortTitle: "成长",
+    en: "A Talk With Myself",
+    enShort: "Growth",
+    prompt: "回看过去，有没有一件事让你更了解现在的自己？",
+    enPrompt: "Looking back, is there an experience that helped you understand who you are now?",
+    examples:
+      "那一年我的人生跌入谷底……但我慢慢重建生活，变成更独立、情绪稳定的人。那段时光满是痛苦、不断试错，回头看，正是它塑造了现在的我。",
+    enExamples:
+      "That year, my life hit bottom. Slowly, I rebuilt it and became more independent and emotionally steady. Looking back, that painful trial-and-error shaped who I am now.",
+    definition: "叙事中展现深度自我探索，形成丰富、立体的自我认知，高分代表充分的自我复盘与成长探索。",
+  },
+  {
+    id: "resolution",
+    icon: "○",
+    construct: "积极完整化解",
+    title: "慢慢解开的心结",
+    shortTitle: "释怀",
+    en: "Untying the Knot",
+    enShort: "Closure",
+    prompt: "你有没有什么很久才解开的心结，最后是怎么放下的？",
+    enPrompt: "Was there a knot in your heart that took a long time to untie? How did you finally let it go?",
+    examples: "多年过去，我终于原谅了弟弟的过错，接纳他所有不完美，我们的关系也因此更加亲近。",
+    enExamples:
+      "After many years, I finally forgave my younger brother and accepted his imperfections. Our relationship became closer because of it.",
+    definition: "故事冲突得到妥善收尾，结局正向圆满。",
+  },
+  {
+    id: "other",
+    icon: "＋",
+    construct: "其他",
+    title: "其他",
+    shortTitle: "其他",
+    en: "Other",
+    enShort: "Other",
+    prompt: "写下一个只属于你的故事入口。",
+    enPrompt: "Write an entry point that belongs only to your story.",
+    examples: "自由编辑你的引导标题或提示。",
+    enExamples: "Freely write your own prompt or story entry point.",
+    definition: "用户自定义故事入口。",
+  },
+];
+
+export const emptyDraft: StoryDraft = {
+  guide: "",
+  customGuide: "",
+  title: "",
+  body: "",
+  mood: "",
+  stage: "",
+  age: "",
+  gender: "",
+  city: "",
+  cityNameEn: "",
+  cityCountry: "",
+  cityLat: null,
+  cityLon: null,
+  people: [],
+  startedAt: Date.now(),
+  edits: 0,
+  pastedChars: 0,
+  saves: 0,
+  savedAt: 0,
+};

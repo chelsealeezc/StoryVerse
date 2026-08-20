@@ -1,5 +1,6 @@
 node_modules/
 dist/
+outputs/
 .tools/
 .prd-work/
 *.tsbuildinfo
@@ -11,3 +12,9 @@ vite.config.d.ts
 .env
 .env.*
 !.env.example
+!supabase/functions/.env.example
+
+# Cold-start source files contain real story text and import metadata.
+# Keep the local instructions, but never publish the datasets themselves.
+docs/cold-start/*.csv
+docs/cold-start/*.xlsx
