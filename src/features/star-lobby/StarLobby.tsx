@@ -24,6 +24,7 @@ import {
 } from "../../lib/analytics";
 import { createActiveTimer, pageCanAccumulateTime } from "../../lib/analytics-timing";
 import { reactionFeedbackCopy } from "../../lib/reaction-feedback";
+import { preloadStoryImage, storyImageThumbnailUrl } from "../../services/story-image";
 import type { InboxMessage, Language, ResonancePreferences, StoryReaction, Story } from "../../types/domain";
 import type { ThemeMode } from "../../types/ui";
 import "./star-lobby.css";
@@ -66,6 +67,7 @@ type StoryNodeData = {
   lift: number;
   color?: string;
   imageUrl?: string;
+  originalImageUrl?: string;
   status: NonNullable<Story["status"]>;
   recommendationBatchId?: string;
   recommendationRank?: number;
@@ -89,6 +91,8 @@ const starLobbyCopy = {
     searchPlaceholder: "搜索故事、心境、关键词...",
     closePanel: "关闭故事说明",
     imageReady: "故事图片",
+    imageLoading: "正在加载故事图片",
+    imageFailed: "图片暂时未能显示",
     imageMissing: "未生成图片",
     escape: "[ESC]",
     stats: (words: number, cityScore: number) => `文本长度 ${words} / 城市接近度 ${Math.round(cityScore * 100)}%`,
@@ -147,6 +151,8 @@ const starLobbyCopy = {
     searchPlaceholder: "Search stories, moods, keywords...",
     closePanel: "Close story panel",
     imageReady: "Story image",
+    imageLoading: "Loading story image",
+    imageFailed: "Image temporarily unavailable",
     imageMissing: "No image generated",
     escape: "[ESC]",
     stats: (words: number, cityScore: number) => `${words} words / ${Math.round(cityScore * 100)}% city proximity`,
@@ -777,7 +783,15 @@ function StoryPanel({
   const [reportOpen, setReportOpen] = useState(false);
   const [reactionPending, setReactionPending] = useState(false);
   const [reactionNotice, setReactionNotice] = useState("");
+  const [displayImageUrl, setDisplayImageUrl] = useState(node.imageUrl);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   const ownStatus = node.status as keyof typeof text.ownStoryStatus;
+  useEffect(() => {
+    setDisplayImageUrl(node.imageUrl);
+    setImageLoaded(false);
+    setImageFailed(false);
+  }, [node.id, node.imageUrl]);
   const changeReaction = async (nextReaction: StoryReaction | null) => {
     if (reactionPending || !onReactionChange) return;
     setReactionPending(true);
@@ -826,9 +840,36 @@ function StoryPanel({
         >
           <Icon name="x" size={20} />
         </button>
-        <div className="story-image-slot">
-          {node.imageUrl ? <img src={node.imageUrl} alt="" decoding="async" /> : <i>✦</i>}
-          <span>{node.imageUrl ? text.imageReady : text.imageMissing}</span>
+        <div className={`story-image-slot${imageLoaded ? " is-loaded" : ""}`}>
+          {displayImageUrl && !imageFailed && (
+            <img
+              src={displayImageUrl}
+              alt=""
+              decoding="async"
+              fetchPriority="high"
+              onLoad={() => setImageLoaded(true)}
+              onError={() => {
+                if (node.originalImageUrl && displayImageUrl !== node.originalImageUrl) {
+                  setDisplayImageUrl(node.originalImageUrl);
+                  setImageLoaded(false);
+                  return;
+                }
+                setImageFailed(true);
+              }}
+            />
+          )}
+          {(!displayImageUrl || imageFailed || !imageLoaded) && (
+            <i className={displayImageUrl && !imageFailed ? "is-loading" : undefined}>✦</i>
+          )}
+          <span role="status">
+            {imageFailed
+              ? text.imageFailed
+              : displayImageUrl
+                ? imageLoaded
+                  ? text.imageReady
+                  : text.imageLoading
+                : text.imageMissing}
+          </span>
         </div>
         <div className="story-panel-meta">
           <span>
@@ -1577,7 +1618,8 @@ export function StarLobby({
         angle: stableFraction(story.id, 17) * Math.PI * 2,
         lift: (stableFraction(story.id, 31) - 0.5) * 0.8,
         color: story.typeColor,
-        imageUrl: story.imageUrl,
+        imageUrl: story.imageUrl ? storyImageThumbnailUrl(story.imageUrl) : undefined,
+        originalImageUrl: story.imageUrl,
         status: story.status ?? "published",
         recommendationBatchId: story.recommendationBatchId,
         recommendationRank: story.recommendationRank,
@@ -1641,6 +1683,20 @@ export function StarLobby({
     [activeView, nodes, removedStoryIds],
   );
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      [...nodes]
+        .filter((node) => node.imageUrl)
+        .sort((a, b) => {
+          if (a.isCenterStory !== b.isCenterStory) return a.isCenterStory ? -1 : 1;
+          return (a.recommendationRank ?? Number.MAX_SAFE_INTEGER) - (b.recommendationRank ?? Number.MAX_SAFE_INTEGER);
+        })
+        .slice(0, 4)
+        .forEach((node) => preloadStoryImage(node.imageUrl));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [nodes]);
+
   const nodeEventProperties = (node: StoryNodeData) => ({
     story_id: node.id,
     story_title: node.label,
@@ -1683,6 +1739,7 @@ export function StarLobby({
       return;
     }
     if (readSession.current?.node.id === node.id) return;
+    preloadStoryImage(node.imageUrl, "high");
     finishRead("story_switched");
     const readId = crypto.randomUUID();
     const timer = createActiveTimer();
@@ -1869,6 +1926,7 @@ export function StarLobby({
         removedIds={removedStoryIds}
         lobbyViewId={lobbyViewId}
         onExpose={(node, visibleMs) => {
+          preloadStoryImage(node.imageUrl);
           const key = starExposureKey(lobbyViewId, activeView, node.id);
           exposedAt.current.set(key, Date.now());
           track("star_exposed", { ...nodeEventProperties(node), visible_ms: visibleMs });
@@ -1880,6 +1938,8 @@ export function StarLobby({
             key={node.id}
             type="button"
             onClick={() => selectNode(node)}
+            onPointerEnter={() => preloadStoryImage(node.imageUrl)}
+            onFocus={() => preloadStoryImage(node.imageUrl)}
             aria-label={`${language === "zh" ? "打开星点故事" : "Open story star"}：${node.label}`}
           >
             {node.label}
@@ -1935,6 +1995,7 @@ export function StarLobby({
       <p className="bottom-legend">{text.legend}</p>
       {selectedNode && (
         <StoryPanel
+          key={selectedNode.id}
           node={selectedNode}
           language={language}
           reaction={reactions[selectedNode.id] ?? null}

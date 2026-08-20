@@ -162,6 +162,10 @@ try {
   }
   const response = await fetch(first.imageUrl);
   if (!response.ok) throw new Error(`Online image is not publicly readable (${response.status}).`);
+  const cacheControl = response.headers.get("cache-control") ?? "";
+  if (!cacheControl.includes("max-age=31536000")) {
+    throw new Error(`Online image does not use the expected one-year browser cache (${cacheControl || "missing"}).`);
+  }
   const imageBytes = await response.arrayBuffer();
   const dimensions = imageDimensions(imageBytes);
   if (dimensions.width !== dimensions.height) {
@@ -192,6 +196,7 @@ try {
         generatedImageRows: imageCount,
         modelAttemptsAfterThreeRequests: attemptCount,
         repeatedRequestsReused: true,
+        browserCache: cacheControl,
         requiredPromptContext: "title-location-age-gender-stage-full-body",
         visualArtifact,
         placesSearch: places.degraded ? "local-fallback-ready" : "online",

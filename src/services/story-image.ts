@@ -11,6 +11,55 @@ export type StoryHighlight = {
   emotion: string;
 };
 
+const STORY_IMAGE_THUMBNAIL_SIZE = 768;
+const STORY_IMAGE_THUMBNAIL_QUALITY = 75;
+const preloadedStoryImages = new Set<string>();
+const preloadingStoryImages = new Map<string, HTMLImageElement>();
+
+/**
+ * StarLobby only renders a roughly 430px square. Hosted Supabase projects can
+ * serve a much smaller cached derivative while the original remains available
+ * for the StoryPage download/open action.
+ */
+export function storyImageThumbnailUrl(imageUrl: string) {
+  if (!imageUrl) return imageUrl;
+  try {
+    const url = new URL(imageUrl);
+    const objectPrefix = "/storage/v1/object/public/";
+    if (!url.pathname.startsWith(objectPrefix) || ["127.0.0.1", "localhost"].includes(url.hostname)) {
+      return imageUrl;
+    }
+    url.pathname = url.pathname.replace(objectPrefix, "/storage/v1/render/image/public/");
+    url.searchParams.set("width", String(STORY_IMAGE_THUMBNAIL_SIZE));
+    url.searchParams.set("height", String(STORY_IMAGE_THUMBNAIL_SIZE));
+    url.searchParams.set("resize", "cover");
+    url.searchParams.set("quality", String(STORY_IMAGE_THUMBNAIL_QUALITY));
+    return url.toString();
+  } catch {
+    return imageUrl;
+  }
+}
+
+export function preloadStoryImage(imageUrl?: string, priority: "high" | "low" = "low") {
+  if (
+    !imageUrl ||
+    typeof Image === "undefined" ||
+    preloadedStoryImages.has(imageUrl) ||
+    preloadingStoryImages.has(imageUrl)
+  )
+    return;
+  const image = new Image();
+  preloadingStoryImages.set(imageUrl, image);
+  image.decoding = "async";
+  image.fetchPriority = priority;
+  image.onload = () => {
+    preloadingStoryImages.delete(imageUrl);
+    preloadedStoryImages.add(imageUrl);
+  };
+  image.onerror = () => preloadingStoryImages.delete(imageUrl);
+  image.src = imageUrl;
+}
+
 export async function createStoryImagePreview(
   _draft: StoryDraft,
   analysis: StoryAnalysis,

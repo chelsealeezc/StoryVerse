@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { reactionFeedbackCopy } from "../src/lib/reaction-feedback";
-import { openStoryImageInNewTab } from "../src/services/story-image";
+import { openStoryImageInNewTab, preloadStoryImage, storyImageThumbnailUrl } from "../src/services/story-image";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -17,6 +17,44 @@ describe("故事图片打开方式", () => {
     expect(anchor.target).toBe("_blank");
     expect(anchor.rel).toBe("noopener noreferrer");
     expect(anchor.click).toHaveBeenCalledOnce();
+  });
+
+  it("StarLobby 使用 768px 正方形缩略图，同时保留原图地址供下载", () => {
+    const original = "https://project.supabase.co/storage/v1/object/public/story-images/user/story/generated.jpeg";
+    const thumbnail = new URL(storyImageThumbnailUrl(original));
+
+    expect(thumbnail.pathname).toBe("/storage/v1/render/image/public/story-images/user/story/generated.jpeg");
+    expect(thumbnail.searchParams.get("width")).toBe("768");
+    expect(thumbnail.searchParams.get("height")).toBe("768");
+    expect(thumbnail.searchParams.get("resize")).toBe("cover");
+    expect(thumbnail.searchParams.get("quality")).toBe("75");
+    expect(original).toContain("/storage/v1/object/public/");
+  });
+
+  it("本地 Supabase 未启用图片变换时继续使用原图", () => {
+    const local = "http://127.0.0.1:54321/storage/v1/object/public/story-images/story.jpeg";
+    expect(storyImageThumbnailUrl(local)).toBe(local);
+  });
+
+  it("预加载图片使用异步解码和指定优先级", () => {
+    const ImageMock = vi.fn(
+      class {
+        decoding = "auto";
+        fetchPriority = "auto";
+        src = "";
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+      },
+    );
+    vi.stubGlobal("Image", ImageMock);
+
+    preloadStoryImage("https://example.test/preload-story.jpeg", "high");
+
+    expect(ImageMock).toHaveBeenCalledOnce();
+    const image = ImageMock.mock.results[0].value;
+    expect(image.decoding).toBe("async");
+    expect(image.fetchPriority).toBe("high");
+    expect(image.src).toBe("https://example.test/preload-story.jpeg");
   });
 });
 

@@ -120,6 +120,7 @@ export async function generateSeedStoryImage(
     uploadedStoragePath = `${userId}/${storyId}/${imageId}.${extension}`;
     const { error: uploadError } = await admin.storage.from("story-images").upload(uploadedStoragePath, bytes, {
       contentType,
+      cacheControl: "31536000",
       upsert: false,
     });
     if (uploadError) throw uploadError;

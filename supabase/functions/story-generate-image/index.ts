@@ -125,6 +125,7 @@ serve(async (request) => {
     const storagePath = `${user.id}/${story.id}/${imageId}.${extension}`;
     const { error: uploadError } = await admin.storage.from("story-images").upload(storagePath, bytes, {
       contentType,
+      cacheControl: "31536000",
       upsert: false,
     });
     if (uploadError) throw uploadError;
