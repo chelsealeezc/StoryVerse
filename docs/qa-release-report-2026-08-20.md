@@ -36,4 +36,22 @@
 
 ## 生产验证
 
-发布完成后补充 Supabase Functions、线上业务冒烟、埋点、故事恢复、图片和 GitHub Pages 结果。
+### Supabase
+
+| 检查                               | 结果                                              |
+| ---------------------------------- | ------------------------------------------------- |
+| 数据库迁移 dry-run                 | 线上已是最新，无待执行迁移                        |
+| Edge Function Secrets              | 必要配置存在；补齐独立埋点 HMAC 与生产公开 URL    |
+| Edge Functions                     | 21 个函数完成部署或确认代码未变化                 |
+| `npm run qa:online-smoke`          | 22/22 通过                                        |
+| `npm run qa:online-story-recovery` | 5/5 通过                                          |
+| `npm run qa:online-analytics`      | 24/24 通过，测试数据已清理                        |
+| `npm run qa:online-image`          | 2048×2048；三次请求只产生 1 行记录和 1 次模型调用 |
+
+线上图片 Prompt 已验证包含标题、地点、年龄、性别、人生阶段和完整正文；测试图片保存在 Storage 且可以读取。
+
+### GitHub
+
+- 正式发布分支：`agent/storyverse-production-release`
+- 发布 PR：[#18](https://github.com/chelsealeezc/StoryVerse/pull/18)
+- GitHub Pages 与最终生产页面验证在 PR 合并后执行。
